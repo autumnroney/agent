@@ -1,7 +1,7 @@
 // Pure economics math (owned by the econ-modeling-engineer agent).
 // No DOM, no fetch: every function takes observations [{date: "YYYY-MM-DD", value: number}] sorted by date.
 // M6: yearAgo. M7: recession periods, 3-month average, Sahm rule, yield curve. M8: Okun gap,
-// Taylor rule, presets, NROU trimming, step-fill and series alignment. Later: real rate, Phillips points.
+// Taylor rule, presets, NROU trimming, step-fill and series alignment. M9: Phillips eras/points, real rate.
 
 import { shiftYears, addMonths } from "./format.js";
 
@@ -303,4 +303,68 @@ export function latestComplete(rows) {
 export function latestRule(rows) {
   for (let i = (rows?.length ?? 0) - 1; i >= 0; i--) if (rows[i].rule !== null) return rows[i];
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// M9: Phillips curve eras and points, real interest rate (Policy Lab II).
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Phillips-curve eras (PRD F37). `start`/`end` are inclusive "YYYY-MM" months; `end: null` = latest data.
+ * Copy (labels, blurbs) lives in content.js POLICY_LAB.phillips.eras, which must use the same ids and dates.
+ */
+export const ERAS = Object.freeze([
+  Object.freeze({ id: "postwar", start: "1948-01", end: "1969-12" }),
+  Object.freeze({ id: "stagflation", start: "1970-01", end: "1983-12" }),
+  Object.freeze({ id: "moderation", start: "1984-01", end: "2007-12" }),
+  Object.freeze({ id: "recession", start: "2008-01", end: "2019-12" }),
+  Object.freeze({ id: "pandemic", start: "2020-01", end: null }),
+]);
+
+/** The id of the era containing a date ("YYYY-MM-DD" or "YYYY-MM"), or null when it's before the first era. */
+export function eraOf(date, eras = ERAS) {
+  const mk = monthKey(date);
+  for (const e of eras) if (mk >= e.start && (e.end === null || mk <= e.end)) return e.id;
+  return null;
+}
+
+/**
+ * Phillips-curve scatter points: one per month in which both unemployment and inflation exist
+ * (inner join by month, never by array index), from the first era's start (1948) on.
+ * @param {{unrate: {date: string, value: number}[], inflation: {date: string, value: number}[]}} s
+ *   inflation = 12-month % change (FRED units pc1)
+ * @returns {{date: string, u: number, pi: number, era: string}[]} sorted by date
+ */
+export function phillipsPoints({ unrate, inflation }, eras = ERAS) {
+  const out = [];
+  for (const r of alignMonthly({ u: unrate ?? [], pi: inflation ?? [] })) {
+    const era = eraOf(r.date, eras);
+    if (era) out.push({ date: r.date, u: r.u, pi: r.pi, era });
+  }
+  return out;
+}
+
+/**
+ * Ex post real federal funds rate for each month with both inputs (inner join by month):
+ * real = fed funds − inflation over the past 12 months (an approximation of the Fisher equation;
+ * the ex ante rate would use expected inflation).
+ * @param {{fedfunds: {date: string, value: number}[], inflation: {date: string, value: number}[]}} s
+ * @returns {{date: string, ff: number, pi: number, real: number}[]}
+ */
+export function realRate({ fedfunds, inflation }) {
+  return alignMonthly({ ff: fedfunds ?? [], pi: inflation ?? [] }).map((r) => ({ ...r, real: r.ff - r.pi }));
+}
+
+/**
+ * Policy stance of a real rate against a neutral rate r*, compared at display precision so the verdict
+ * agrees with the numbers shown: diff = round(real) − round(r*). "near" when that rounds to 0.
+ * Tighter than neutral = real rate above r*; looser = below.
+ * @returns {{stance: "tighter"|"looser"|"near", diff: number, x: string}}
+ */
+export function policyStance(real, rStar, digits = 1) {
+  const r = Number(Number(real).toFixed(digits));
+  const s = Number(Number(rStar).toFixed(digits));
+  const diff = Number((r - s).toFixed(digits));
+  const stance = diff > 0 ? "tighter" : diff < 0 ? "looser" : "near";
+  return { stance, diff: diff === 0 ? 0 : diff, x: Math.abs(diff).toFixed(digits) };
 }

@@ -22,6 +22,11 @@ import {
   taylorSeries,
   latestComplete,
   latestRule,
+  ERAS,
+  eraOf,
+  phillipsPoints,
+  realRate,
+  policyStance,
 } from "../public/lib/econ.js";
 import {
   periodLabel,
@@ -33,6 +38,7 @@ import {
   fillTemplate,
   compareAtDisplay,
   taylorRightNow,
+  stanceRightNow,
 } from "../public/lib/narrate.js";
 import { POLICY_LAB } from "../public/content.js";
 
@@ -511,4 +517,152 @@ test("taylorRightNow: higher / lower / same / floored, note always last", () => 
   // No actual rate (FEDFUNDS failed): just the note.
   assert.deepEqual(taylorRightNow({ rule: 2, raw: 2, actual: null, zlb: false }, RN), [RN.note]);
   assert.equal(fillTemplate("{a} and {b}", { a: 1 }), "1 and ");
+});
+
+// ---------- M9: Phillips curve, real rate, policy stance ----------
+
+test("ERAS: five contiguous eras from 1948, matching the copy in content.js (ids and dates)", () => {
+  assert.deepEqual(
+    ERAS.map((e) => [e.id, e.start, e.end]),
+    [
+      ["postwar", "1948-01", "1969-12"],
+      ["stagflation", "1970-01", "1983-12"],
+      ["moderation", "1984-01", "2007-12"],
+      ["recession", "2008-01", "2019-12"],
+      ["pandemic", "2020-01", null],
+    ]
+  );
+  // The writer's era copy must agree with the math, or legends would mislabel dots.
+  assert.deepEqual(
+    POLICY_LAB.phillips.eras.map((e) => [e.id, e.start, e.end]),
+    ERAS.map((e) => [e.id, e.start, e.end])
+  );
+  for (const e of POLICY_LAB.phillips.eras) assert.ok(e.label && e.blurb, e.id);
+  assert.ok(Object.isFrozen(ERAS) && Object.isFrozen(ERAS[0]));
+});
+
+test("eraOf: inclusive month boundaries; nothing before 1948", () => {
+  assert.equal(eraOf("1947-12-01"), null);
+  assert.equal(eraOf("1948-01-01"), "postwar");
+  assert.equal(eraOf("1969-12-01"), "postwar");
+  assert.equal(eraOf("1970-01-01"), "stagflation");
+  assert.equal(eraOf("1983-12-01"), "stagflation");
+  assert.equal(eraOf("1984-01-01"), "moderation");
+  assert.equal(eraOf("2007-12-01"), "moderation");
+  assert.equal(eraOf("2008-01-01"), "recession");
+  assert.equal(eraOf("2019-12-01"), "recession");
+  assert.equal(eraOf("2020-01-01"), "pandemic");
+  assert.equal(eraOf("2026-09-01"), "pandemic"); // open-ended: through the latest data
+  assert.equal(eraOf("1975-06"), "stagflation");
+});
+
+test("phillipsPoints: inner join by month (never by index), one point per month, era tagged", () => {
+  // CPI 12-month change starts Jan 1948 (FRED's pc1 needs a year of index levels); UNRATE also starts 1948.
+  // Inflation is offset and has a gap: a by-index join would pair the wrong months.
+  const unrate = monthly("1947-11", [3.9, 3.8, 3.4, 3.8, 4.0]); // Nov 1947 … Mar 1948
+  const inflation = [
+    { date: "1948-01-01", value: 10.2 },
+    // Feb 1948 missing
+    { date: "1948-03-01", value: 6.8 },
+    { date: "1948-04-01", value: 8.6 }, // no UNRATE for April
+  ];
+  assert.deepEqual(phillipsPoints({ unrate, inflation }), [
+    { date: "1948-01-01", u: 3.4, pi: 10.2, era: "postwar" },
+    { date: "1948-03-01", u: 4.0, pi: 6.8, era: "postwar" },
+  ]);
+
+  // Hand-checked months around era boundaries, including the 1975 tooltip example (Jun 1975: 8.8%, 9.4%).
+  const u2 = [
+    { date: "1969-12-01", value: 3.5 },
+    { date: "1970-01-01", value: 3.9 },
+    { date: "1975-06-01", value: 8.8 },
+    { date: "2020-04-01", value: 14.8 },
+  ];
+  const pi2 = [
+    { date: "1969-12-01", value: 6.2 },
+    { date: "1970-01-01", value: 6.16 },
+    { date: "1975-06-01", value: 9.4 },
+    { date: "2020-04-01", value: 0.3 },
+  ];
+  const pts = phillipsPoints({ unrate: u2, inflation: pi2 });
+  assert.deepEqual(
+    pts.map((p) => [p.date.slice(0, 7), p.era, p.u, p.pi]),
+    [
+      ["1969-12", "postwar", 3.5, 6.2],
+      ["1970-01", "stagflation", 3.9, 6.16],
+      ["1975-06", "stagflation", 8.8, 9.4],
+      ["2020-04", "pandemic", 14.8, 0.3],
+    ]
+  );
+
+  // Months before 1948 never become dots; empty/missing input gives no points.
+  assert.deepEqual(phillipsPoints({ unrate: [{ date: "1947-06-01", value: 4 }], inflation: [{ date: "1947-06-01", value: 9 }] }), []);
+  assert.deepEqual(phillipsPoints({ unrate: null, inflation: [] }), []);
+});
+
+test("phillipsPoints: core PCE view starts in 1960 because its 12-month change does", () => {
+  const unrate = monthly("1959-11", [5.8, 5.3, 5.2, 4.8]);
+  const corePce = monthly("1960-01", [2.0, 1.9]);
+  assert.deepEqual(
+    phillipsPoints({ unrate, inflation: corePce }).map((p) => p.date),
+    ["1960-01-01", "1960-02-01"]
+  );
+});
+
+test("realRate: FEDFUNDS − 12-month inflation, aligned by month (hand-computed)", () => {
+  // FEDFUNDS has a month PCE lacks (PCE is released later) and PCE starts before FEDFUNDS.
+  const fedfunds = [
+    { date: "2021-06-01", value: 0.08 },
+    { date: "2021-07-01", value: 0.1 },
+    { date: "2024-06-01", value: 5.33 },
+    { date: "2024-07-01", value: 5.33 }, // no PCE yet for this month
+  ];
+  const corePce = [
+    { date: "2021-05-01", value: 3.1 }, // no FEDFUNDS for this month
+    { date: "2021-06-01", value: 3.6 },
+    { date: "2021-07-01", value: 3.7 },
+    { date: "2024-06-01", value: 2.6 },
+  ];
+  const rows = realRate({ fedfunds, inflation: corePce });
+  assert.deepEqual(rows.map((r) => r.date), ["2021-06-01", "2021-07-01", "2024-06-01"]);
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  assert.ok(near(rows[0].real, -3.52), String(rows[0].real)); // 0.08 − 3.6
+  assert.ok(near(rows[1].real, -3.6), String(rows[1].real)); // 0.10 − 3.7
+  assert.ok(near(rows[2].real, 2.73), String(rows[2].real)); // 5.33 − 2.6
+  assert.equal(rows[2].ff, 5.33);
+  assert.equal(rows[2].pi, 2.6);
+
+  // Same data with FEDFUNDS shifted one slot (an index join would give 0.10 − 3.6): still by date.
+  const shifted = realRate({ fedfunds: fedfunds.slice(1), inflation: corePce });
+  assert.ok(near(shifted[0].real, -3.6) && shifted[0].date === "2021-07-01");
+  assert.deepEqual(realRate({ fedfunds: null, inflation: corePce }), []);
+});
+
+test("policyStance: tighter above r*, looser below, near when the shown gap rounds to 0.0", () => {
+  assert.deepEqual(policyStance(2.73, 2), { stance: "tighter", diff: 0.7, x: "0.7" });
+  assert.deepEqual(policyStance(-3.52, 2), { stance: "looser", diff: -5.5, x: "5.5" });
+  assert.deepEqual(policyStance(2.04, 2), { stance: "near", diff: 0, x: "0.0" });
+  assert.deepEqual(policyStance(0.46, 0.5), { stance: "near", diff: 0, x: "0.0" }); // 0.5 − 0.5 as shown
+  assert.deepEqual(policyStance(0.36, 0.5), { stance: "looser", diff: -0.1, x: "0.1" });
+  assert.deepEqual(policyStance(-0.8, -1), { stance: "tighter", diff: 0.2, x: "0.2" });
+  // Same real rate, different r*: the verdict depends on the r* you assume.
+  assert.equal(policyStance(1.2, 2).stance, "looser");
+  assert.equal(policyStance(1.2, 0.5).stance, "tighter");
+});
+
+test("stanceRightNow: tighter / looser / near sentences with r*, note always last", () => {
+  const SR = POLICY_LAB.stance.rightNow;
+  assert.deepEqual(stanceRightNow({ real: 2.73, rStar: 2 }, SR), [
+    "The real rate is 0.7 points above your r* of 2.0%: tighter than neutral.",
+    SR.note,
+  ]);
+  assert.deepEqual(stanceRightNow({ real: -3.52, rStar: 0.5 }, SR), [
+    "The real rate is 4.0 points below your r* of 0.5%: looser than neutral.",
+    SR.note,
+  ]);
+  assert.deepEqual(stanceRightNow({ real: 1.04, rStar: 1 }, SR), [
+    "The real rate is about equal to your r* of 1.0%: close to neutral.",
+    SR.note,
+  ]);
+  assert.deepEqual(stanceRightNow({ real: null, rStar: 2 }, SR), [SR.note]);
 });

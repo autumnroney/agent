@@ -1,9 +1,50 @@
 /* Policy Lab page styles (owned by the econ-modeling-engineer agent). Builds on styles.css tokens
    (--surface, --border, --brand, --c1/--c2, --recession, --ref-line) so light/dark mode follow the site. */
 
+/* M9 chart colors. On :root because charts read them with getComputedStyle(documentElement).
+   Era colors: each meets WCAG 1.4.11 non-text contrast (>= 3:1) against the card surface in its theme
+   (light: 5.2, 3.9, 3.4, 4.9, 10.9 on #fff; dark: 8.0, 7.4, 9.0, 8.0, 14.8 on #171e27) and stays
+   distinguishable under protan/deutan/tritan simulation; each era also has its own marker shape. */
+:root {
+  --era1: #0072b2; /* 1948–69, circle */
+  --era2: #d55e00; /* 1970–83, triangle */
+  --era3: #009e73; /* 1984–2007, square */
+  --era4: #b8458f; /* 2008–19, diamond */
+  --era5: #3d3d3d; /* 2020–now, × */
+  --real-line: #6d28d9;
+  --tight-fill: rgba(194, 65, 12, 0.2);
+  --loose-fill: rgba(29, 78, 216, 0.16);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --era1: #56b4e9;
+    --era2: #f08a3c;
+    --era3: #2ecc9a;
+    --era4: #e58fc4;
+    --era5: #e6e6e6;
+    --real-line: #c4b5fd;
+    --tight-fill: rgba(251, 146, 60, 0.26);
+    --loose-fill: rgba(96, 165, 250, 0.24);
+  }
+}
+
 .lab { --accent: var(--brand); }
 .lab .site-head p { max-width: 75ch; }
-.taylor > h2 { margin: 24px 0 2px; font-size: 1.4rem; }
+.tab-panel > h2 { margin: 20px 0 2px; font-size: 1.4rem; }
+
+/* Tabs: Taylor · Phillips · Stance (WAI-ARIA tabs; the selected tab is bold and underlined, not just colored). */
+.lab-tabs {
+  display: flex; gap: 4px; margin: 18px 0 0; border-bottom: 1px solid var(--border);
+}
+.lab-tabs [role="tab"] {
+  font: inherit; font-size: 1rem; font-weight: 600; color: var(--muted); background: none; cursor: pointer;
+  border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; padding: 10px 14px; min-height: 44px;
+  border-radius: 8px 8px 0 0;
+}
+.lab-tabs [role="tab"]:hover { color: var(--text); background: var(--surface); }
+.lab-tabs [role="tab"][aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); font-weight: 700; background: var(--surface); }
+.lab-tabs [role="tab"]:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.tab-panel[hidden] { display: none; }
 .lab-lead { margin: 0 0 14px; color: var(--muted); }
 .muted { color: var(--muted); }
 
@@ -15,10 +56,16 @@
   grid-template-areas: "chart controls" "now controls";
 }
 .chart-card { grid-area: chart; }
+/* Phillips: scatter + era controls side by side. Stance: chart + "Right now" side by side. */
+.ph-grid { grid-template-rows: auto; grid-template-areas: "chart controls"; }
+.st-grid { grid-template-rows: auto; grid-template-areas: "chart now"; }
+.st-grid .st-now { grid-area: now; }
 .controls { grid-area: controls; }
 .right-now { grid-area: now; }
 @media (max-width: 900px) {
   .lab-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "chart" "now" "controls"; }
+  .ph-grid { grid-template-areas: "chart" "controls"; }
+  .st-grid { grid-template-areas: "chart" "now"; }
 }
 
 .lab h3 { margin: 0; font-size: 1.1rem; }
@@ -34,6 +81,17 @@
 .key-rule::before { border-color: var(--c1); }
 .key-actual::before { border-color: var(--c2); }
 .key-ref::before { border-top-style: solid; }
+.key-real::before { border-color: var(--real-line); }
+.key-rstar::before { height: 0; border-radius: 0; width: 18px; border-top: 2px dashed var(--text); }
+.key-tight::before { background: var(--tight-fill); outline: 1px solid var(--border); }
+.key-loose::before { background: var(--loose-fill); outline: 1px solid var(--border); }
+.key-latest::before { width: 10px; height: 10px; border-radius: 50%; border: 3px solid var(--text); background: none; }
+.key-path.era-postwar::before { border-color: var(--era1); }
+.key-path.era-stagflation::before { border-color: var(--era2); }
+.key-path.era-moderation::before { border-color: var(--era3); }
+.key-path.era-recession::before { border-color: var(--era4); }
+.key-path.era-pandemic::before { border-color: var(--era5); }
+.ph-chart { height: 460px; }
 
 /* Segmented buttons (range, presets): bigger tap targets than the dashboard's. */
 .lab .seg button { min-height: 36px; padding: 6px 12px; }
@@ -116,6 +174,42 @@ select:focus-visible, .radios input:focus-visible, .check input:focus-visible { 
 .formula-main { font-weight: 600; }
 .formula-symbols { color: var(--muted); }
 
+/* Phillips era toggles (F36): buttons with aria-pressed. Shown = filled marker, solid border;
+   hidden = hollow marker, dashed border, struck-through label (not color alone). */
+.eras { margin-top: 0; }
+.eras legend { font-size: 1.1rem; font-weight: 600; }
+.era-buttons { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.era-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px; text-align: left;
+  font: inherit; font-size: 0.9rem; color: var(--text); background: var(--surface); cursor: pointer;
+  border: 2px solid var(--border); border-radius: 8px;
+}
+.era-btn:hover { background: var(--bg); }
+.era-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.era-btn[aria-pressed="true"] { border-color: var(--muted); }
+.era-btn[aria-pressed="false"] { border-style: dashed; color: var(--muted); }
+.era-btn[aria-pressed="false"] span { text-decoration: line-through; }
+.era-btn .marker { flex-shrink: 0; width: 18px; height: 18px; }
+.marker > * { fill: currentColor; stroke: currentColor; stroke-width: 1; }
+.marker > .stroke-only { fill: none; stroke-width: 2.6; stroke-linecap: round; }
+.era-btn[aria-pressed="false"] .marker > * { fill: none; stroke-width: 1.6; }
+.era-btn[aria-pressed="false"] .marker > .stroke-only { stroke-width: 1.4; }
+.era-all { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.era-all .tool { min-height: 36px; }
+.era-all .tool:disabled { color: var(--muted); cursor: default; opacity: 0.8; }
+.connect { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.sub-label { display: block; margin-top: 6px; font-size: 0.85rem !important; font-weight: 400 !important; color: var(--muted); }
+.era-notes { margin-top: 16px; }
+.era-list { margin: 8px 0 0; }
+.era-list dt { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-top: 12px; }
+.era-list dd { margin: 2px 0 0 26px; max-width: 80ch; }
+
+/* Stance "Right now". */
+.st-rn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.st-now .rn-item.real dd { color: var(--real-line); }
+.rstar-note { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.rstar-note .tool { margin-top: 8px; min-height: 40px; font-weight: 600; }
+
 /* Explainer, try this, sources (F39). */
 .explainer, .try-this, .sources { margin-top: 16px; }
 .explainer p, .try-this li, .sources p { max-width: 80ch; }
@@ -136,7 +230,10 @@ select:focus-visible, .radios input:focus-visible, .check input:focus-visible { 
 
 @media (max-width: 480px) {
   .lab-chart { height: 260px; }
-  .taylor > h2 { font-size: 1.25rem; }
+  .ph-chart { height: 340px; }
+  .tab-panel > h2 { font-size: 1.25rem; }
+  .lab-tabs { gap: 2px; }
+  .lab-tabs [role="tab"] { flex: 1 1 0; padding: 8px 4px; font-size: 0.88rem; line-height: 1.2; }
   .rn-grid { grid-template-columns: 1fr 1fr; }
   .rn-item.big dd:not(.rn-help) { font-size: 1.3rem; }
   .lab .range { display: flex; width: 100%; flex-wrap: nowrap; }

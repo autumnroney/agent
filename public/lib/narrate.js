@@ -2,7 +2,7 @@
 // Pure: no DOM, no fetch. Sentences state facts with dates — no causes, forecasts or advice.
 
 import { formatNumber, formatQuarter } from "./format.js";
-import { yearAgo, SAHM_THRESHOLD } from "./econ.js";
+import { yearAgo, SAHM_THRESHOLD, policyStance } from "./econ.js";
 
 const longMonth = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -116,6 +116,26 @@ export function taylorRightNow({ rule, raw, actual, zlb }, copy) {
   }
   // Only when the unfloored rate is negative as displayed (−0.04 would read "0.0%").
   if (zlb && Number.isFinite(raw) && Number(raw.toFixed(1)) < 0) out.push(fillTemplate(copy.floored, { x: formatNumber(raw, 1) }));
+  out.push(copy.note);
+  return out;
+}
+
+// ---------- M9: Policy Lab "Policy stance" ----------
+
+/**
+ * Plain-English "Right now" sentences for the policy stance, using the copy templates passed in
+ * (content.js POLICY_LAB.stance.rightNow: tighter, looser, near, note). {x} = |real − r*| as displayed
+ * (1 decimal), {rStar} = r* at 1 decimal. `near` when that rounds to 0.0. `note` is always last.
+ * @param {{real: number, rStar: number}} r
+ * @param {{tighter: string, looser: string, near: string, note: string}} copy
+ * @returns {string[]}
+ */
+export function stanceRightNow({ real, rStar }, copy) {
+  const out = [];
+  if (Number.isFinite(real) && Number.isFinite(rStar)) {
+    const s = policyStance(real, rStar, 1);
+    out.push(fillTemplate(copy[s.stance], { x: s.x, rStar: formatNumber(rStar, 1) }));
+  }
   out.push(copy.note);
   return out;
 }

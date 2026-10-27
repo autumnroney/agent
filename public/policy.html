@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Policy Lab · FRED Macro Dashboard</title>
-  <meta name="description" content="Taylor rule lab: set the neutral rate, inflation target and weights, then compare the rule-implied interest rate with the actual federal funds rate using live FRED data.">
+  <meta name="description" content="Policy Lab: a Taylor rule you can tune, the Phillips curve since 1948 by era, and the real federal funds rate versus a neutral rate, all with live FRED data.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="policy.css">
@@ -13,14 +13,21 @@
 </head>
 <body data-page="policy">
   <!-- Policy Lab (owner: econ-modeling-engineer). Nav/footer from lib/nav.js; all copy from content.js
-       (POLICY_LAB), rendered with textContent by policy.js; math in lib/econ.js. -->
+       (POLICY_LAB), rendered with textContent by policy.js; math in lib/econ.js. Three tab panels:
+       Taylor rule (M8), Phillips curve and Policy stance (M9). The active tab is in the URL hash (tab=). -->
   <main class="wrap lab" id="main">
     <header class="site-head">
       <h1 id="lab-title"></h1>
       <p id="lab-intro"></p>
     </header>
 
-    <section class="taylor" id="taylor" aria-labelledby="taylor-heading">
+    <div class="lab-tabs" id="lab-tabs" role="tablist">
+      <button type="button" role="tab" id="tab-taylor" data-tab="taylor" aria-controls="taylor" aria-selected="true"></button>
+      <button type="button" role="tab" id="tab-phillips" data-tab="phillips" aria-controls="phillips" aria-selected="false" tabindex="-1"></button>
+      <button type="button" role="tab" id="tab-stance" data-tab="stance" aria-controls="stance" aria-selected="false" tabindex="-1"></button>
+    </div>
+
+    <section class="taylor tab-panel" id="taylor" role="tabpanel" aria-labelledby="tab-taylor">
       <h2 id="taylor-heading"></h2>
       <p class="lab-lead" id="taylor-lead"></p>
       <p id="shading-status" class="shading-status" role="status" hidden></p>
@@ -29,9 +36,9 @@
         <article class="card chart-card no-data" id="chart-card" aria-labelledby="chart-heading">
           <div class="chart-head">
             <h3 id="chart-heading"></h3>
-            <div class="seg range" id="range" role="group" aria-label="Time range"></div>
+            <div class="seg range" id="range" role="group"></div>
           </div>
-          <p class="loading" id="chart-loading">Loading…</p>
+          <p class="loading" id="chart-loading"></p>
           <div class="chart-wrap lab-chart"><canvas id="taylor-chart" role="img"></canvas></div>
           <p class="chart-legend" id="chart-legend"></p>
           <p class="error" id="chart-error" role="status" hidden></p>
@@ -91,6 +98,96 @@
       <section class="card explainer" id="explainer" aria-labelledby="explainer-heading"></section>
       <section class="card try-this" id="try-this" aria-labelledby="try-heading"></section>
       <section class="card sources" id="sources" aria-labelledby="sources-heading"></section>
+    </section>
+
+    <section class="phillips tab-panel" id="phillips" role="tabpanel" aria-labelledby="tab-phillips" hidden>
+      <h2 id="phillips-heading"></h2>
+      <p class="lab-lead" id="phillips-lead"></p>
+
+      <div class="lab-grid ph-grid">
+        <article class="card chart-card no-data" id="ph-card" aria-labelledby="ph-chart-heading">
+          <div class="chart-head">
+            <h3 id="ph-chart-heading"></h3>
+          </div>
+          <p class="loading" id="ph-loading"></p>
+          <div class="chart-wrap lab-chart ph-chart"><canvas id="ph-chart" role="img"></canvas></div>
+          <p class="chart-legend" id="ph-legend"></p>
+          <p class="error" id="ph-error" role="status" hidden></p>
+          <div class="chart-tools">
+            <button type="button" class="tool" id="ph-table-toggle" aria-expanded="false" aria-controls="ph-table"></button>
+          </div>
+          <div class="table-wrap" id="ph-table" role="region" tabindex="0" hidden></div>
+        </article>
+
+        <form class="card controls" id="ph-controls" aria-labelledby="ph-eras-legend" novalidate>
+          <fieldset class="eras">
+            <legend id="ph-eras-legend"></legend>
+            <p class="help" id="ph-eras-help"></p>
+            <div class="era-buttons" id="era-buttons"></div>
+            <div class="era-all">
+              <button type="button" class="tool" id="eras-show-all"></button>
+              <button type="button" class="tool" id="eras-hide-all"></button>
+            </div>
+          </fieldset>
+          <div class="field connect">
+            <label class="check"><input type="checkbox" id="ph-connect" aria-describedby="ph-connect-help"> <span id="ph-connect-label"></span></label>
+            <label for="ph-connect-era" id="ph-connect-era-label" class="sub-label"></label>
+            <select id="ph-connect-era"></select>
+            <p class="help" id="ph-connect-help"></p>
+          </div>
+          <div class="field">
+            <label for="ph-measure" id="ph-measure-label"></label>
+            <select id="ph-measure"></select>
+            <p class="help" id="ph-measure-note"></p>
+            <p class="help why" id="ph-measure-why"></p>
+          </div>
+        </form>
+      </div>
+
+      <section class="card era-notes" id="ph-era-notes" aria-labelledby="ph-era-notes-heading"></section>
+      <section class="card explainer" id="ph-explainer" aria-labelledby="ph-explainer-heading"></section>
+      <section class="card try-this" id="ph-try-this" aria-labelledby="ph-try-heading"></section>
+      <section class="card sources" id="ph-sources" aria-labelledby="ph-sources-heading"></section>
+    </section>
+
+    <section class="stance tab-panel" id="stance" role="tabpanel" aria-labelledby="tab-stance" hidden>
+      <h2 id="stance-heading"></h2>
+      <p class="lab-lead" id="stance-lead"></p>
+      <p id="st-shading-status" class="shading-status" role="status" hidden></p>
+
+      <div class="lab-grid st-grid">
+        <article class="card chart-card no-data" id="st-card" aria-labelledby="st-chart-heading">
+          <div class="chart-head">
+            <h3 id="st-chart-heading"></h3>
+            <div class="seg range" id="st-range" role="group"></div>
+          </div>
+          <p class="loading" id="st-loading"></p>
+          <div class="chart-wrap lab-chart"><canvas id="st-chart" role="img"></canvas></div>
+          <p class="chart-legend" id="st-legend"></p>
+          <p class="error" id="st-error" role="status" hidden></p>
+          <div class="chart-tools">
+            <button type="button" class="tool" id="st-table-toggle" aria-expanded="false" aria-controls="st-table"></button>
+          </div>
+          <div class="table-wrap" id="st-table" role="region" tabindex="0" hidden></div>
+        </article>
+
+        <section class="card right-now st-now no-data" id="st-now" aria-labelledby="st-rn-heading">
+          <h3 id="st-rn-heading"></h3>
+          <p class="as-of" id="st-rn-asof"></p>
+          <dl class="rn-grid st-rn-grid" id="st-rn-grid"></dl>
+          <div class="rn-sentences" id="st-rn-sentences" aria-live="polite"></div>
+          <p class="formula formula-symbols" id="st-formula-symbols"></p>
+          <p class="formula formula-main" id="st-formula"></p>
+          <div class="rstar-note">
+            <p class="help" id="st-rstar-help"></p>
+            <button type="button" class="tool" id="st-rstar-link"></button>
+          </div>
+        </section>
+      </div>
+
+      <section class="card explainer" id="st-explainer" aria-labelledby="st-explainer-heading"></section>
+      <section class="card try-this" id="st-try-this" aria-labelledby="st-try-heading"></section>
+      <section class="card sources" id="st-sources" aria-labelledby="st-sources-heading"></section>
     </section>
   </main>
 </body>
