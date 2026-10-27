@@ -2,6 +2,9 @@
 
 **Say in the morning:** "continue to do what we were doing last night". Claude should read this file first.
 
+## Paused
+The owner ended the build after M9 on Oct 28. To resume, finish M9 QA (qa-tester), fast-forward `main` to the branch, then start M10.
+
 ## Process (keep using it)
 Source of truth: `docs/PRD-v2.md` §8, milestones M6–M12. For each milestone:
 1. Use the project agents in `.claude/agents/`: econ-content-writer writes copy first, then the lead owner builds, then qa-tester signs off. (Earlier, a general-purpose builder agent that acts as that milestone's owner agents (see `.claude/agents/` and PRD §11 file ownership). It implemented each milestone's scope, ran `npm test` and browser-tested with the mock server.)
@@ -17,8 +20,8 @@ Source of truth: `docs/PRD-v2.md` §8, milestones M6–M12. For each milestone:
 | M6 Foundation | Done: commit cbb476f, on `main` |
 | M7 Smarter charts + Recession Watch | Done: on `main` (77/77 tests) |
 | M8 Policy Lab I: Taylor rule | Done: on `main` (89/89 tests, QA PASS) |
-| M9 Policy Lab II: Phillips curve + policy stance | **NEXT**: the content writer writes the copy in content.js first, then econ-modeling-engineer builds the page, then qa-tester signs off |
-| M10 Live-data Quiz | Not started |
+| M9 Policy Lab II: Phillips curve + policy stance | Built and committed on the branch (96/96 tests, builder's browser checks passed). QA was stopped partway: the basic checks passed and the economics/browser review is unfinished. **Not on `main` yet.** |
+| M10 Live-data Quiz | Not started (paused at the owner's request) |
 | M11 Class Mode | Not started |
 | M12 Hardening | Not started |
 
