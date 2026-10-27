@@ -16,7 +16,80 @@ export const ABOUT = {
   paragraphs: [
     "Built by <strong>Autumn Roney, M.S. Economics, Florida Atlantic University</strong>, for students in Principles of Macroeconomics who want to connect what's in the textbook to what's happening in the economy right now.",
     'All data come from <a href="https://fred.stlouisfed.org/" target="_blank" rel="noopener">FRED</a>, the free economic database run by the Federal Reserve Bank of St. Louis. Figures are seasonally adjusted and update automatically when new data are released. Tip: switch to the 20Y view to see the 2008–09 Great Recession and the 2020 pandemic shock.',
+    'Gray bands on the charts mark recessions as dated by the <a href="https://www.nber.org/research/business-cycle-dating" target="_blank" rel="noopener">National Bureau of Economic Research (NBER)</a>, the group of economists that officially calls U.S. recessions. They look at jobs, income, spending and output, not just “two negative quarters” of GDP.',
   ],
+};
+
+// One-paragraph auto summary at the top of the dashboard (F24). The sentences themselves are generated
+// from the data by lib/narrate.js; this is the label around them.
+export const SUMMARY = {
+  heading: "The latest numbers",
+  note: "Each change compares the latest month (or quarter) with the same month a year earlier.",
+};
+
+// Recession shading legend (F20), shown under every time-series chart.
+export const RECESSION_SHADING = {
+  note: "Shaded = recession (NBER)",
+  unavailable: "Recession shading is unavailable right now; the data are unaffected.",
+};
+
+// Recession Watch panel (F23). Plain text. Signals, never forecasts.
+export const RECESSION_WATCH = {
+  heading: "Recession Watch",
+  intro:
+    "Two warning signs economists watch, computed from the latest FRED data. Both have flagged past recessions, and both have also given false alarms. Neither is a forecast.",
+  sahm: {
+    title: "Sahm rule",
+    formula: "3-month average unemployment rate minus its lowest 3-month average in the previous 12 months",
+    what:
+      "Named for economist Claudia Sahm. When the 3-month average unemployment rate climbs 0.50 percentage points or more above its low of the past year, the U.S. has usually been in the early months of a recession.",
+    signalLabel: "signal at 0.50",
+    triggered: "Signal reached",
+    notTriggered: "Below the signal",
+    caveat:
+      "A historical pattern, not a forecast. It reached 0.50 in mid-2024 without a recession being declared. We compute it from today's revised unemployment data, so it can differ slightly from FRED's real-time version (SAHMREALTIME), which uses the numbers as first reported.",
+    chartLabel: "Sahm rule reading over time, with the 0.50 signal line",
+    thresholdLine: "0.50 signal",
+  },
+  yieldCurve: {
+    title: "Yield curve (10-year minus 3-month)",
+    what:
+      "The 10-year Treasury yield minus the 3-month yield, averaged over each month. Usually long-term rates are higher. When the spread drops below zero the curve is “inverted”: markets expect short-term rates to be lower in the future, often because they expect the economy to weaken.",
+    inverted: "Inverted",
+    notInverted: "Not inverted",
+    caveat:
+      "An inverted curve came before every U.S. recession since the late 1960s, but the lead time was long and varied, often a year or more. The curve stayed inverted from late 2022 into 2024 without a recession in that period. A signal to watch, not a prediction.",
+    chartLabel: "10-year minus 3-month Treasury spread over time, with a zero line",
+    zeroLine: "0 (below = inverted)",
+    legendBelowZero: "Below zero = inverted",
+  },
+};
+
+// Labels for the per-chart tools (F21, F22). Plain text; "{n}" is replaced with a number.
+export const CHART_UI = {
+  downloadCSV: "Download CSV",
+  showTable: "Show data table",
+  hideTable: "Hide data table",
+  showAll: "Show all {n} rows",
+  showFewer: "Show latest {n} rows",
+  tableCaption: "{name}, {range} view, newest first",
+  dateHeader: "Date",
+  valueHeader: "Value",
+  measureLabel: "Inflation measure",
+  targetLegend: "2% target (PCE)",
+};
+
+// Original source agency per series, as FRED lists them (used in CSV headers now, citations in M11).
+export const SOURCES = {
+  CPIAUCSL: "U.S. Bureau of Labor Statistics",
+  UNRATE: "U.S. Bureau of Labor Statistics",
+  FEDFUNDS: "Board of Governors of the Federal Reserve System",
+  GDPC1: "U.S. Bureau of Economic Analysis",
+  PCEPI: "U.S. Bureau of Economic Analysis",
+  PCEPILFE: "U.S. Bureau of Economic Analysis",
+  USREC: "Federal Reserve Bank of St. Louis", // based on NBER recession dates
+  T10Y3M: "Federal Reserve Bank of St. Louis",
+  NROU: "U.S. Congressional Budget Office",
 };
 
 // Shared footer on every page (plain text).

@@ -4,26 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FRED Macro Dashboard</title>
-  <meta name="description" content="Live U.S. inflation, unemployment, interest rate and GDP data from FRED, explained for intro macroeconomics students.">
+  <meta name="description" content="Live U.S. inflation, unemployment, interest rate and GDP data from FRED with recession shading and a Recession Watch, explained for intro macroeconomics students.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
   <script type="module" src="app.js"></script>
 </head>
 <body data-page="dashboard">
-  <!-- Nav and footer come from lib/nav.js; header and About copy from content.js. -->
+  <!-- Nav and footer come from lib/nav.js; all copy from content.js / indicators.js; charts via lib/charts.js. -->
   <main class="wrap" id="main">
     <header class="site-head">
       <h1 id="site-title"></h1>
       <p id="site-tagline"></p>
     </header>
 
+    <section class="summary" id="summary" aria-labelledby="summary-heading" hidden>
+      <h2 id="summary-heading"></h2>
+      <p id="summary-text"></p>
+      <p id="summary-note" class="summary-note"></p>
+    </section>
+
     <div class="toolbar">
       <span id="range-label">Time range</span>
       <div id="range" role="group" aria-labelledby="range-label"></div>
+      <p id="shading-status" class="shading-status" role="status" hidden></p>
     </div>
 
     <section id="cards" aria-label="Economic indicators"></section>
+
+    <section class="watch" id="recession-watch" aria-labelledby="watch-heading">
+      <h2 id="watch-heading"></h2>
+      <p class="watch-intro"></p>
+      <div class="watch-grid"></div>
+    </section>
 
     <section class="about" id="about" aria-labelledby="about-heading">
       <h2 id="about-heading"></h2>

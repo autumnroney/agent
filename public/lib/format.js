@@ -67,6 +67,20 @@ export function shiftYears(iso, years) {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Shift a first-of-month ISO date by whole months (negative = back): ("2009-06-01", 1) -> "2009-07-01".
+ * Days past the end of the target month clamp to its last day.
+ */
+export function addMonths(iso, months) {
+  const d = parseISODate(iso);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay));
+  return d.toISOString().slice(0, 10);
+}
+
 /** "#a=1&b=x" or "a=1&b=x" -> { a: "1", b: "x" }. Values stay strings; callers validate. */
 export function parseHash(hash = "") {
   const out = {};

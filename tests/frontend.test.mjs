@@ -10,7 +10,22 @@ import {
   shiftYears,
   parseHash,
   buildHash,
+  addMonths,
 } from "../public/lib/format.js";
+import {
+  USREC_START,
+  sliceRange,
+  dateToIndex,
+  bandIndices,
+  recessionShadingPlugin,
+  referenceLinesPlugin,
+  csvField,
+  toCSV,
+  csvFilename,
+  todayISO,
+  tableRows,
+} from "../public/lib/charts.js";
+import { recessionPeriods } from "../public/lib/econ.js";
 import { createFredClient, FredError, getSeries } from "../public/lib/fred-client.js";
 import { NAV_ITEMS, navHTML, pageFromPath, comingSoonHTML } from "../public/lib/nav.js";
 import * as content from "../public/content.js";
@@ -396,5 +411,195 @@ describe("copy modules", () => {
       INDICATORS.map((i) => i.id),
       ["CPIAUCSL", "UNRATE", "FEDFUNDS", "GDPC1"]
     );
+    for (const ind of INDICATORS) assert.ok(ind.summaryLabel, ind.id);
+  });
+
+  test("inflation card toggles CPI / PCE / core PCE; the 2% line is on PCE views only", () => {
+    const infl = INDICATORS.find((i) => i.id === "CPIAUCSL");
+    assert.deepEqual(
+      infl.variants.map((v) => [v.id, v.label, v.target]),
+      [
+        ["CPIAUCSL", "CPI", null],
+        ["PCEPI", "PCE", 2],
+        ["PCEPILFE", "Core PCE", 2],
+      ]
+    );
+    for (const v of infl.variants) assert.ok(v.name && v.unitNote && v.note, v.id);
+  });
+
+  test("content.js has Recession Watch, shading and chart-tool copy", () => {
+    assert.equal(content.RECESSION_SHADING.note, "Shaded = recession (NBER)");
+    for (const k of ["sahm", "yieldCurve"]) {
+      const c = content.RECESSION_WATCH[k];
+      assert.ok(c.title && c.what && c.caveat && c.chartLabel, k);
+      assert.match(c.caveat, /not a (forecast|prediction)/i, k);
+    }
+    assert.match(content.CHART_UI.showAll, /\{n\}/);
+    for (const id of ["CPIAUCSL", "UNRATE", "FEDFUNDS", "GDPC1", "PCEPI", "PCEPILFE", "USREC", "T10Y3M", "NROU"]) {
+      assert.ok(content.SOURCES[id], id);
+    }
+  });
+});
+
+// ---------- format.js: addMonths ----------
+
+test("addMonths shifts months across year ends and clamps day overflow", () => {
+  assert.equal(addMonths("2009-06-01", 1), "2009-07-01");
+  assert.equal(addMonths("2020-12-01", 1), "2021-01-01");
+  assert.equal(addMonths("2020-01-01", -12), "2019-01-01");
+  assert.equal(addMonths("2020-03-01", -2), "2020-01-01");
+  assert.equal(addMonths("2024-01-31", 1), "2024-02-29");
+});
+
+// ---------- charts.js ----------
+
+const monthlyObs = (start, n, f = (i) => i) => {
+  const [y, m] = start.split("-").map(Number);
+  return Array.from({ length: n }, (_, i) => ({
+    date: new Date(Date.UTC(y, m - 1 + i, 1)).toISOString().slice(0, 10),
+    value: f(i),
+  }));
+};
+
+describe("charts.js", () => {
+  test("sliceRange: from N years before the latest date; null = everything", () => {
+    const obs = monthlyObs("2000-01-01", 321); // through 2026-09
+    assert.equal(obs.at(-1).date, "2026-09-01");
+    const y20 = sliceRange(obs, 20);
+    assert.equal(y20[0].date, "2006-09-01");
+    assert.equal(y20.at(-1).date, "2026-09-01");
+    assert.equal(y20.length, 241);
+    assert.equal(sliceRange(obs, 1).length, 13);
+    assert.equal(sliceRange(obs, null).length, 321);
+    assert.deepEqual(sliceRange([], 5), []);
+    assert.notEqual(sliceRange(obs, null), obs); // a copy
+  });
+
+  test("dateToIndex: exact labels, interpolation between quarters, extrapolation past the ends", () => {
+    const monthly = ["2020-01-01", "2020-02-01", "2020-03-01"];
+    assert.equal(dateToIndex(monthly, "2020-02-01"), 1);
+    // Past the end, extrapolate with the last spacing: 31 days after Mar 1 over a 29-day step.
+    assert.ok(Math.abs(dateToIndex(monthly, "2020-04-01") - (2 + 31 / 29)) < 1e-12);
+    const q = ["2020-01-01", "2020-04-01", "2020-07-01"];
+    const i = dateToIndex(q, "2020-03-01");
+    assert.ok(i > 0.6 && i < 0.7, String(i)); // Mar 1 is 60 of 91 days into Q1
+    assert.ok(dateToIndex(q, "2019-10-01") < 0);
+    assert.ok(dateToIndex(q, "2021-01-01") > 2);
+    assert.ok(Number.isNaN(dateToIndex([], "2020-01-01")));
+  });
+
+  test("bandIndices: NBER periods map to the right label span and clip to the visible range", () => {
+    const usrec = monthlyObs("2000-01-01", 321, () => 0).map((o) => ({
+      ...o,
+      value:
+        (o.date >= "2001-04-01" && o.date <= "2001-11-01") ||
+        (o.date >= "2008-01-01" && o.date <= "2009-06-01") ||
+        (o.date >= "2020-03-01" && o.date <= "2020-04-01")
+          ? 1
+          : 0,
+    }));
+    const periods = recessionPeriods(usrec);
+    const labels = sliceRange(monthlyObs("2000-01-01", 321), 20).map((o) => o.date); // 2006-09 .. 2026-09
+    const bands = bandIndices(labels, periods);
+    assert.equal(bands.length, 2); // 2001 is outside the 20Y window
+    const idx = (d) => labels.indexOf(d);
+    assert.deepEqual(bands[0], { from: idx("2008-01-01"), to: idx("2009-07-01") });
+    assert.deepEqual(bands[1], { from: idx("2020-03-01"), to: idx("2020-05-01") });
+    // The April 2020 unemployment spike sits inside the 2020 band.
+    assert.ok(idx("2020-04-01") > bands[1].from && idx("2020-04-01") < bands[1].to);
+    // Clipping: a recession that started before the first label starts at index 0.
+    const clipped = bandIndices(labels.slice(labels.indexOf("2009-01-01")), periods);
+    assert.deepEqual(clipped[0], { from: 0, to: 6 });
+    assert.deepEqual(bandIndices(labels, []), []);
+    assert.deepEqual(bandIndices([], periods), []);
+  });
+
+  test("bandIndices: quarterly labels shade the quarter that contains the recession", () => {
+    const labels = ["2019-10-01", "2020-01-01", "2020-04-01", "2020-07-01"];
+    const [b] = bandIndices(labels, [{ start: "2020-03-01", end: "2020-04-01" }]);
+    assert.ok(b.from > 1 && b.from < 2 && b.to > 2 && b.to < 3, JSON.stringify(b)); // Q2 2020 point inside
+  });
+
+  test("plugins draw with a stub canvas context (no DOM needed)", () => {
+    const calls = [];
+    const ctx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : (...a) => calls.push([k, ...a])), set: (t, k, v) => ((t[k] = v), true) });
+    const chart = {
+      ctx,
+      chartArea: { left: 10, right: 110, top: 0, bottom: 50 },
+      scales: { x: { getPixelForValue: (v) => 10 + v * 10 }, y: { getPixelForValue: (v) => 50 - v * 10 } },
+    };
+    recessionShadingPlugin([{ from: 1, to: 3 }], "gray").beforeDatasetsDraw(chart);
+    assert.deepEqual(calls.find((c) => c[0] === "fillRect"), ["fillRect", 20, 0, 20, 50]);
+    calls.length = 0;
+    referenceLinesPlugin([{ y: 2, color: "#000", label: "2% target" }, { y: 99, color: "#000" }]).beforeDatasetsDraw(chart);
+    assert.deepEqual(calls.filter((c) => c[0] === "moveTo"), [["moveTo", 10, 30]]); // off-chart line skipped
+    assert.ok(calls.some((c) => c[0] === "fillText" && c[1] === "2% target" && c[3] === 27)); // above the line
+    calls.length = 0;
+    referenceLinesPlugin([{ y: 4.5, color: "#000", label: "top" }]).beforeDatasetsDraw(chart); // y = 5px, near the top
+    assert.ok(calls.some((c) => c[0] === "fillText" && c[1] === "top" && c[3] === 8)); // drawn below instead
+  });
+
+  test("CSV: header rows, then date,value for exactly the observations given", () => {
+    const obs = [
+      { date: "2026-08-01", value: 4.2 },
+      { date: "2026-09-01", value: 4.3 },
+    ];
+    const csv = toCSV(obs, {
+      id: "UNRATE",
+      title: "Unemployment rate",
+      units: "%",
+      frequency: "Monthly",
+      source: "U.S. Bureau of Labor Statistics via FRED, Federal Reserve Bank of St. Louis",
+      range: "20Y",
+      retrieved: "2026-10-27",
+    });
+    const lines = csv.trimEnd().split("\r\n");
+    assert.deepEqual(lines, [
+      "Series ID,UNRATE",
+      "Title,Unemployment rate",
+      "Units,%",
+      "Frequency,Monthly",
+      'Source,"U.S. Bureau of Labor Statistics via FRED, Federal Reserve Bank of St. Louis"',
+      "URL,https://fred.stlouisfed.org/series/UNRATE",
+      "Range shown,20Y (2026-08-01 to 2026-09-01)",
+      "Retrieved,2026-10-27",
+      "",
+      "date,value",
+      "2026-08-01,4.2",
+      "2026-09-01,4.3",
+    ]);
+    assert.ok(csv.endsWith("\r\n"));
+    assert.equal(lines.at(-1).split(",")[1], "4.3"); // last row = the card's latest value
+  });
+
+  test("csvField quotes commas, quotes and newlines", () => {
+    assert.equal(csvField("plain"), "plain");
+    assert.equal(csvField("a,b"), '"a,b"');
+    assert.equal(csvField('say "hi"'), '"say ""hi"""');
+    assert.equal(csvField("a\nb"), '"a\nb"');
+    assert.equal(csvField(-0.5), "-0.5");
+    assert.equal(csvField(undefined), "");
+  });
+
+  test("csvFilename / todayISO", () => {
+    assert.equal(csvFilename("UNRATE", "20Y", "2026-10-27"), "UNRATE_20Y_2026-10-27.csv");
+    assert.equal(csvFilename("SAHM-from-UNRATE", "Max", "2026-10-27"), "SAHM-from-UNRATE_Max_2026-10-27.csv");
+    assert.equal(todayISO(new Date(2026, 9, 27, 23, 59)), "2026-10-27");
+    assert.equal(todayISO(new Date(2026, 0, 5)), "2026-01-05");
+  });
+
+  test("tableRows: newest first, 24 by default, all on request", () => {
+    const obs = monthlyObs("2020-01-01", 30);
+    const rows = tableRows(obs);
+    assert.equal(rows.length, 24);
+    assert.equal(rows[0].date, "2022-06-01");
+    assert.equal(rows.at(-1).date, "2020-07-01");
+    assert.equal(tableRows(obs, { all: true }).length, 30);
+    assert.equal(obs[0].date, "2020-01-01"); // input not mutated
+    assert.deepEqual(tableRows(undefined), []);
+  });
+
+  test("USREC is requested from a fixed early date (one cache key, before any chart's first point)", () => {
+    assert.equal(USREC_START, "1947-01-01");
   });
 });

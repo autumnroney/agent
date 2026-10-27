@@ -15,12 +15,17 @@ Source of truth: `docs/PRD-v2.md` §8, milestones M6–M12. For each milestone:
 | v1 (M1–M5) | Done, live on Netlify (dashing-kheer-aa0aeb.netlify.app) |
 | Plan v2 (PRD-v2 + new agents) | Done |
 | M6 Foundation | Done: commit cbb476f, on `main` |
-| M7 Smarter charts + Recession Watch | **In progress** (see the update below) |
-| M8 Policy Lab I: Taylor rule | Not started |
+| M7 Smarter charts + Recession Watch | Done: on `main` (77/77 tests) |
+| M8 Policy Lab I: Taylor rule | **NEXT: start here** |
 | M9 Policy Lab II: Phillips curve + policy stance | Not started |
 | M10 Live-data Quiz | Not started |
 | M11 Class Mode | Not started |
 | M12 Hardening | Not started |
+
+## Open notes from M7
+- The About line "Figures are seasonally adjusted" doesn't apply to USREC or T10Y3M. The econ-content-writer should fix it in a later milestone.
+- `SOURCES` (the agency for each series) is in `public/content.js` already. M11 citations should reuse it.
+- `public/lib/charts.js` has shared helpers (shading, reference lines, CSV, tables). The Policy Lab (M8/M9) should reuse them.
 
 ## Testing notes
 - This sandbox blocks FRED and cdnjs. Browser tests use a mock server that sends synthetic data through the real function, with cdnjs requests routed to a local Chart.js. Those scripts live in the session scratchpad, which won't exist in a new session. Recreate them like this:

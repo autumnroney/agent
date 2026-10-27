@@ -1,8 +1,10 @@
 // Indicator metadata and plain-English copy (owned by the econ-content-writer agent).
+// Plain data only (no DOM). `summaryLabel` starts the dashboard's auto-summary sentence for that card.
 export const INDICATORS = [
   {
-    id: "CPIAUCSL",
-    name: "Inflation (CPI)",
+    id: "CPIAUCSL", // default measure; `variants` lists every measure the card can switch to
+    name: "Inflation",
+    summaryLabel: "CPI inflation",
     unit: "%",
     unitNote: "Consumer Price Index, % change from a year ago",
     color: "--c1",
@@ -11,11 +13,39 @@ export const INDICATORS = [
     whyFed:
       "Stable prices are half of the Fed's mandate from Congress. When inflation runs hot, the Fed usually raises interest rates to cool spending; when it's low and the economy is weak, it cuts them.",
     goodToKnow:
-      "The Fed's official 2% target is measured with a different index (PCE inflation), which tends to run a bit below CPI. CPI is the one you'll see in headlines and in Social Security raises.",
+      "The Fed's 2% target is set for PCE inflation, not CPI. PCE usually runs a bit lower because it covers more spending (including what employers and government pay for your health care) and adjusts as people switch to cheaper products. Core PCE leaves out food and energy, whose prices swing a lot.",
+    // Measure toggle (F25). `target` (the Fed's 2% goal) is drawn only on PCE views.
+    variants: [
+      {
+        id: "CPIAUCSL",
+        label: "CPI",
+        name: "Inflation (CPI)",
+        unitNote: "Consumer Price Index, % change from a year ago",
+        note: "CPI is the measure in news headlines and Social Security raises. No 2% line here: the Fed's target is defined for PCE inflation, not CPI.",
+        target: null,
+      },
+      {
+        id: "PCEPI",
+        label: "PCE",
+        name: "Inflation (PCE)",
+        unitNote: "PCE price index, % change from a year ago",
+        note: "PCE is the measure the Fed's 2% target is written for (dashed line). Above the line means prices are rising faster than the Fed wants.",
+        target: 2,
+      },
+      {
+        id: "PCEPILFE",
+        label: "Core PCE",
+        name: "Inflation (core PCE)",
+        unitNote: "PCE excluding food and energy, % change from a year ago",
+        note: "Core PCE drops food and energy, whose prices jump around. The 2% target is officially for headline PCE, but the Fed watches core as a guide to where inflation is heading.",
+        target: 2,
+      },
+    ],
   },
   {
     id: "UNRATE",
     name: "Unemployment rate",
+    summaryLabel: "Unemployment",
     unit: "%",
     unitNote: "% of the labor force, seasonally adjusted",
     color: "--c2",
@@ -29,6 +59,7 @@ export const INDICATORS = [
   {
     id: "FEDFUNDS",
     name: "Federal funds rate",
+    summaryLabel: "The effective federal funds rate",
     unit: "%",
     unitNote: "Effective rate, monthly average",
     color: "--c3",
@@ -42,6 +73,7 @@ export const INDICATORS = [
   {
     id: "GDPC1",
     name: "Real GDP growth",
+    summaryLabel: "Real GDP growth (annual rate)",
     unit: "%",
     unitNote: "Quarterly, % change at an annual rate",
     color: "--c4",
