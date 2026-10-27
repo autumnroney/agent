@@ -4,7 +4,7 @@
 
 ## Process (keep using it)
 Source of truth: `docs/PRD-v2.md` §8, milestones M6–M12. For each milestone:
-1. Spawn a builder agent that acts as that milestone's owner agents (see `.claude/agents/` and PRD §11 file ownership). It implements exactly that milestone's scope, runs `npm test`, and browser-tests with the mock server.
+1. Use the project agents in `.claude/agents/`: econ-content-writer writes copy first, then the lead owner builds, then qa-tester signs off. (Earlier, a general-purpose builder agent that acts as that milestone's owner agents (see `.claude/agents/` and PRD §11 file ownership). It implemented each milestone's scope, ran `npm test` and browser-tested with the mock server.)
 2. Run QA: `npm test`, `node --check` on every JS file, scan for API keys (`git grep -nE '[0-9a-f]{32}'`; only the test FAKE_KEY may match), and confirm the browser checks.
 3. Commit as "M<n>: ..." and push to the working branch `claude/busy-tesla-9wq512`. Fast-forward `main` once the milestone passes (Netlify deploys `main`; the owner approved this on Oct 27).
 4. Move on to the next milestone until M12 is done.
@@ -16,8 +16,8 @@ Source of truth: `docs/PRD-v2.md` §8, milestones M6–M12. For each milestone:
 | Plan v2 (PRD-v2 + new agents) | Done |
 | M6 Foundation | Done: commit cbb476f, on `main` |
 | M7 Smarter charts + Recession Watch | Done: on `main` (77/77 tests) |
-| M8 Policy Lab I: Taylor rule | **NEXT: start here** |
-| M9 Policy Lab II: Phillips curve + policy stance | Not started |
+| M8 Policy Lab I: Taylor rule | Done: on `main` (89/89 tests, QA PASS) |
+| M9 Policy Lab II: Phillips curve + policy stance | **NEXT**: the content writer writes the copy in content.js first, then econ-modeling-engineer builds the page, then qa-tester signs off |
 | M10 Live-data Quiz | Not started |
 | M11 Class Mode | Not started |
 | M12 Hardening | Not started |
