@@ -11,11 +11,23 @@ You are building a teaching tool for intro-macroeconomics students on behalf of 
 
 ## File structure
 ```
-public/                 static site (index.html, styles.css, app.js, indicators.js)
+public/                 static multi-page site, vanilla ES modules, no build step
+  index.html, app.js    Dashboard (4 indicator cards)
+  policy.html/.js       Policy Lab ("Coming soon" stub until M8)
+  quiz.html/.js         Quiz ("Coming soon" stub until M10)
+  present.html/.js      Class Mode ("Coming soon" stub until M11)
+  styles.css            global styles (nav, cards, stubs, dark mode)
+  indicators.js         per-indicator metadata + copy
+  content.js            all other copy (header, About, footer, stub pages; later glossary/explainers)
+  lib/                  shared modules, importable in Node (no DOM at import time)
+    fred-client.js      getSeries(id, {start}): /api/fred + errors + in-flight dedupe + sessionStorage cache
+    format.js           date/number formatting, URL-hash helpers
+    nav.js              shared skip link, top nav, footer, "Coming soon" body
+    econ.js             pure economics math (yearAgo; more from M7)
 netlify/functions/      fred.mjs — FRED proxy (whitelisted series only)
 netlify.toml            publish dir, functions dir, /api/* redirect
-tests/                  node:test unit tests (mocked fetch, no network)
-docs/PRD.md             product requirements
+tests/                  node:test unit tests (mocked fetch, no network): fred, frontend, econ
+docs/PRD-v2.md          product requirements (v2, source of truth); docs/PRD.md = v1 history
 .claude/agents/         sub-agent definitions
 ```
 

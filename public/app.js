@@ -1,32 +1,16 @@
 import { INDICATORS, RANGES, DEFAULT_RANGE } from "./indicators.js";
+import { SITE, ABOUT } from "./content.js";
+import { getSeries } from "./lib/fred-client.js";
+import { formatDate, formatValue, formatChange, shiftYears } from "./lib/format.js";
+import { yearAgo } from "./lib/econ.js";
+import { mountNav } from "./lib/nav.js";
 
 const data = new Map(); // series id -> observations [{date, value}]
 const charts = new Map(); // series id -> Chart instance
 let range = DEFAULT_RANGE;
 
-const monthFmt = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-const quarterOf = (d) => `Q${Math.floor(d.getUTCMonth() / 3) + 1} ${d.getUTCFullYear()}`;
-
-function formatDate(iso, id) {
-  const d = new Date(iso + "T00:00:00Z");
-  return id === "GDPC1" ? quarterOf(d) : monthFmt.format(d);
-}
-
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-function yearsBefore(iso, years) {
-  const d = new Date(iso + "T00:00:00Z");
-  d.setUTCFullYear(d.getUTCFullYear() - years);
-  return d.toISOString().slice(0, 10);
-}
-
-// Latest observation on or before the same date one year earlier.
-function yearAgo(obs) {
-  const target = yearsBefore(obs.at(-1).date, 1);
-  for (let i = obs.length - 1; i >= 0; i--) if (obs[i].date <= target) return obs[i];
-  return null;
 }
 
 function renderCardShell(ind) {
@@ -60,23 +44,21 @@ function renderLatest(ind) {
   const card = document.getElementById(`card-${ind.id}`);
   const obs = data.get(ind.id);
   const last = obs.at(-1);
-  card.querySelector(".value").textContent = `${last.value.toFixed(1).replace("-", "−")}${ind.unit}`;
+  card.querySelector(".value").textContent = formatValue(last.value, ind.unit);
   card.querySelector(".as-of").textContent = `as of ${formatDate(last.date, ind.id)}`;
 
   const prev = yearAgo(obs);
-  const changeEl = card.querySelector(".change");
   if (prev) {
-    const diff = last.value - prev.value;
-    const sign = diff > 0 ? "+" : diff < 0 ? "−" : "±";
-    changeEl.textContent = `${sign}${Math.abs(diff).toFixed(1)} pts vs. ${formatDate(prev.date, ind.id)}`;
+    card.querySelector(".change").textContent =
+      `${formatChange(last.value - prev.value)} pts vs. ${formatDate(prev.date, ind.id)}`;
   }
 }
 
 function renderChart(ind) {
   const all = data.get(ind.id);
-  if (!all) return;
+  if (!all || typeof Chart === "undefined") return;
   const years = RANGES.find((r) => r.label === range).years;
-  const start = years ? yearsBefore(all.at(-1).date, years) : "";
+  const start = years ? shiftYears(all.at(-1).date, -years) : "";
   const obs = all.filter((o) => o.date >= start);
 
   const color = cssVar(ind.color);
@@ -142,23 +124,32 @@ function renderChart(ind) {
   );
 }
 
-async function load(ind) {
+function showError(ind, message, { dataMissing = true } = {}) {
   const card = document.getElementById(`card-${ind.id}`);
+  card.classList.add("has-error");
+  if (dataMissing) card.querySelector(".as-of").textContent = "Unavailable";
+  const errEl = card.querySelector(".error");
+  errEl.textContent = message;
+  errEl.hidden = false;
+}
+
+async function load(ind) {
+  let body;
   try {
-    const res = await fetch(`/api/fred?series=${ind.id}`);
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || `Request failed (HTTP ${res.status})`);
-    if (!body.observations?.length) throw new Error("FRED returned no data for this series.");
-    data.set(ind.id, body.observations);
-    renderLatest(ind);
-    renderChart(ind);
+    body = await getSeries(ind.id);
   } catch (err) {
-    card.classList.add("has-error");
-    card.querySelector(".as-of").textContent = "Unavailable";
-    const errEl = card.querySelector(".error");
-    errEl.textContent = `Couldn't load this chart: ${err.message}`;
-    errEl.hidden = false;
+    showError(ind, `Couldn't load this chart: ${err.message}`);
+    return;
   }
+  data.set(ind.id, body.observations);
+  renderLatest(ind);
+  if (typeof Chart === "undefined") {
+    showError(ind, "Couldn't load the charting library. Check your connection and reload the page.", {
+      dataMissing: false,
+    });
+    return;
+  }
+  renderChart(ind);
 }
 
 function renderRangeButtons() {
@@ -177,13 +168,29 @@ function renderRangeButtons() {
   }
 }
 
+function renderCopy() {
+  document.getElementById("site-title").textContent = SITE.title;
+  document.getElementById("site-tagline").textContent = SITE.tagline;
+  const about = document.getElementById("about");
+  document.getElementById("about-heading").textContent = ABOUT.heading;
+  for (const html of ABOUT.paragraphs) {
+    const p = document.createElement("p");
+    p.innerHTML = html; // trusted static copy from content.js
+    about.appendChild(p);
+  }
+}
+
 function init() {
+  mountNav("dashboard");
+  renderCopy();
   const grid = document.getElementById("cards");
   INDICATORS.forEach((ind) => grid.appendChild(renderCardShell(ind)));
   renderRangeButtons();
   INDICATORS.forEach(load);
   // Redraw with the new palette when the system theme flips.
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => INDICATORS.forEach(renderChart));
+  // "About" in the nav is an in-page link; honor it once the copy exists.
+  if (location.hash === "#about") document.getElementById("about").scrollIntoView();
 }
 
 init();

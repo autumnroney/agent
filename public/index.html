@@ -10,11 +10,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
   <script type="module" src="app.js"></script>
 </head>
-<body>
-  <main class="wrap">
+<body data-page="dashboard">
+  <!-- Nav and footer come from lib/nav.js; header and About copy from content.js. -->
+  <main class="wrap" id="main">
     <header class="site-head">
-      <h1>FRED Macro Dashboard</h1>
-      <p>Four numbers the Federal Reserve watches most, updated live from the St. Louis Fed, and what each one actually means.</p>
+      <h1 id="site-title"></h1>
+      <p id="site-tagline"></p>
     </header>
 
     <div class="toolbar">
@@ -24,13 +25,9 @@
 
     <section id="cards" aria-label="Economic indicators"></section>
 
-    <section class="about" id="about">
-      <h2>About</h2>
-      <p>Built by <strong>Autumn Roney, M.S. Economics, Florida Atlantic University</strong>, for students in Principles of Macroeconomics who want to connect what's in the textbook to what's happening in the economy right now.</p>
-      <p>All data come from <a href="https://fred.stlouisfed.org/" target="_blank" rel="noopener">FRED</a>, the free economic database run by the Federal Reserve Bank of St. Louis. Figures are seasonally adjusted and update automatically when new data are released. Tip: switch to the 20Y view to see the 2008–09 Great Recession and the 2020 pandemic shock.</p>
+    <section class="about" id="about" aria-labelledby="about-heading">
+      <h2 id="about-heading"></h2>
     </section>
-
-    <footer>Data: Federal Reserve Bank of St. Louis (FRED), U.S. Bureau of Labor Statistics, U.S. Bureau of Economic Analysis, Board of Governors of the Federal Reserve System. This product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.</footer>
   </main>
 </body>
 </html>

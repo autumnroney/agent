@@ -1,11 +1,26 @@
 // FRED proxy: the browser calls /api/fred, this function adds the API key server-side.
 const FRED_URL = "https://api.stlouisfed.org/fred/series/observations";
 
+// Whitelist (PRD-v2 §5.1). Units and frequency are fixed here; the browser can't choose them.
+// `fredFrequency`/`aggregation` are optional: when set, FRED aggregates the series server-side
+// (T10Y3M is daily; we serve its monthly average).
 export const SERIES = {
   CPIAUCSL: { title: "CPI inflation", units: "pc1", unitsLabel: "% change from a year ago", frequency: "Monthly" },
   UNRATE: { title: "Unemployment rate", units: "lin", unitsLabel: "%", frequency: "Monthly" },
   FEDFUNDS: { title: "Effective federal funds rate", units: "lin", unitsLabel: "%", frequency: "Monthly" },
   GDPC1: { title: "Real GDP growth", units: "pca", unitsLabel: "% change, annualized (quarter over quarter)", frequency: "Quarterly" },
+  USREC: { title: "NBER recession indicator", units: "lin", unitsLabel: "1 = recession month, 0 = expansion", frequency: "Monthly" },
+  PCEPI: { title: "PCE inflation", units: "pc1", unitsLabel: "% change from a year ago", frequency: "Monthly" },
+  PCEPILFE: { title: "Core PCE inflation (excluding food and energy)", units: "pc1", unitsLabel: "% change from a year ago", frequency: "Monthly" },
+  NROU: { title: "Noncyclical rate of unemployment (CBO)", units: "lin", unitsLabel: "%", frequency: "Quarterly" },
+  T10Y3M: {
+    title: "10-year minus 3-month Treasury spread",
+    units: "lin",
+    unitsLabel: "percentage points",
+    frequency: "Monthly (average of daily values)",
+    fredFrequency: "m",
+    aggregation: "avg",
+  },
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,6 +58,10 @@ export default async function handler(request) {
   url.searchParams.set("file_type", "json");
   url.searchParams.set("api_key", apiKey);
   if (start) url.searchParams.set("observation_start", start);
+  if (meta.fredFrequency) {
+    url.searchParams.set("frequency", meta.fredFrequency);
+    url.searchParams.set("aggregation_method", meta.aggregation || "avg");
+  }
 
   let upstream;
   try {
