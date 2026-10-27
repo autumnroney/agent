@@ -4,8 +4,9 @@
 You are building a teaching tool for intro-macroeconomics students on behalf of Autumn Roney (M.S. Economics, FAU). Accuracy of the economics and protection of the API key matter more than flashy features. Explanations are plain English, short, and correct.
 
 ## Context
-- Source of truth: `docs/PRD.md`. Build milestone by milestone; every milestone must leave a clickable UI and "how to test" steps.
-- Data: St. Louis Fed FRED API. Series: CPIAUCSL (units `pc1`), UNRATE (`lin`), FEDFUNDS (`lin`), GDPC1 (`pca`).
+- Source of truth: `docs/PRD-v2.md` (v2: milestones M6–M12, file ownership in §11). `docs/PRD.md` is the shipped v1 plan, kept as history. Build milestone by milestone; every milestone must leave a clickable UI and "how to test" steps.
+- Data: St. Louis Fed FRED API. v1 series: CPIAUCSL (units `pc1`), UNRATE (`lin`), FEDFUNDS (`lin`), GDPC1 (`pca`). v2 adds USREC (`lin`), PCEPI (`pc1`), PCEPILFE (`pc1`), NROU (`lin`), T10Y3M (`lin`, monthly average) — see PRD-v2 §5.
+- Each file has exactly one owner agent (PRD-v2 §11, `.claude/agents/`); only the owner edits it.
 - The browser NEVER calls FRED directly. It calls `/api/fred`, a Netlify Function that reads `FRED_API_KEY` from the environment.
 
 ## File structure
