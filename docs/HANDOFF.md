@@ -1,0 +1,34 @@
+# Handoff: where the v2 build left off
+
+**Say in the morning:** "continue to do what we were doing last night". Claude should read this file first.
+
+## Process (keep using it)
+Source of truth: `docs/PRD-v2.md` §8, milestones M6–M12. For each milestone:
+1. Spawn a builder agent that acts as that milestone's owner agents (see `.claude/agents/` and PRD §11 file ownership). It implements exactly that milestone's scope, runs `npm test`, and browser-tests with the mock server.
+2. Run QA: `npm test`, `node --check` on every JS file, scan for API keys (`git grep -nE '[0-9a-f]{32}'`; only the test FAKE_KEY may match), and confirm the browser checks.
+3. Commit as "M<n>: ..." and push to the working branch `claude/busy-tesla-9wq512`. Fast-forward `main` once the milestone passes (Netlify deploys `main`; the owner approved this on Oct 27).
+4. Move on to the next milestone until M12 is done.
+
+## Status
+| Milestone | Status |
+|---|---|
+| v1 (M1–M5) | Done, live on Netlify (dashing-kheer-aa0aeb.netlify.app) |
+| Plan v2 (PRD-v2 + new agents) | Done |
+| M6 Foundation | Done: commit cbb476f, on `main` |
+| M7 Smarter charts + Recession Watch | **In progress** (see the update below) |
+| M8 Policy Lab I: Taylor rule | Not started |
+| M9 Policy Lab II: Phillips curve + policy stance | Not started |
+| M10 Live-data Quiz | Not started |
+| M11 Class Mode | Not started |
+| M12 Hardening | Not started |
+
+## Testing notes
+- This sandbox blocks FRED and cdnjs. Browser tests use a mock server that sends synthetic data through the real function, with cdnjs requests routed to a local Chart.js. Those scripts live in the session scratchpad, which won't exist in a new session. Recreate them like this:
+  - `npm pack chart.js@4.4.1` and extract it.
+  - Run a small Node server that serves `public/` and calls `netlify/functions/fred.mjs` with a mocked `globalThis.fetch` that returns synthetic observations for every whitelisted series.
+  - In Playwright, `page.route("https://cdnjs.cloudflare.com/**")` to the local `chart.umd.js`.
+- None of this has been tested against real FRED data yet. After each deploy, check the live site, including `/api/fred?series=UNRATE`.
+
+## Owner's to-dos
+- Netlify env var must be named exactly `FRED_API_KEY`. It was briefly mistyped as `FED_API_KEY`. Redeploy after any change.
+- The Netlify project must be **public** for the instructor to view it.
