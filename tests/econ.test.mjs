@@ -9,6 +9,19 @@ import {
   sahmTriggered,
   yieldCurve,
   SAHM_THRESHOLD,
+  OKUN_DEFAULT,
+  TAYLOR_PRESETS,
+  okunGap,
+  taylorRule,
+  applyZLB,
+  matchPreset,
+  trimToLatest,
+  stepFillMonthly,
+  alignMonthly,
+  taylorInputs,
+  taylorSeries,
+  latestComplete,
+  latestRule,
 } from "../public/lib/econ.js";
 import {
   periodLabel,
@@ -17,7 +30,11 @@ import {
   dashboardSummary,
   sahmSentence,
   yieldCurveSentence,
+  fillTemplate,
+  compareAtDisplay,
+  taylorRightNow,
 } from "../public/lib/narrate.js";
+import { POLICY_LAB } from "../public/content.js";
 
 const monthly = (start, values) => {
   const [y, m] = start.split("-").map(Number);
@@ -283,4 +300,215 @@ test("sahmSentence / yieldCurveSentence state facts with dates", () => {
   for (const s of [sahmSentence({ date: "2020-04-01", value: 4, triggered: true }), yieldCurveSentence({ date: "2023-06-01", value: -1, inverted: true, invertedMonths: 1 })]) {
     assert.doesNotMatch(s, /will|forecast|predict|because/i);
   }
+});
+
+// ---------- M8: Okun gap and Taylor rule ----------
+
+const T1993 = TAYLOR_PRESETS.taylor1993;
+const close = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg ?? ""} expected ${b}, got ${a}`);
+
+test("okunGap: gap ≈ −k(u − u*), default k = 2", () => {
+  assert.equal(OKUN_DEFAULT, 2);
+  assert.equal(okunGap(5, 4), -2); // u − u* = +1 → gap −2
+  assert.equal(okunGap(3.5, 4.5), 2); // tight labor market → positive gap
+  assert.equal(okunGap(4.4, 4.4), 0);
+  assert.ok(!Object.is(okunGap(4.4, 4.4), -0), "no negative zero");
+  close(okunGap(6, 4.5, 2.5), -3.75);
+  close(okunGap(5.2, 4.2, 1.5), -1.5);
+});
+
+test("taylorRule: Taylor (1993) acceptance numbers (PRD M8)", () => {
+  assert.deepEqual(T1993, { rStar: 2, piStar: 2, aPi: 0.5, aY: 0.5 });
+  // π = 2, gap = 0 → 2 + 2 + 0.5·0 + 0.5·0 = 4.0
+  assert.equal(taylorRule({ pi: 2, gap: 0, ...T1993 }), 4.0);
+  // π = 4, gap = 0 → 2 + 4 + 0.5·2 = 7.0
+  assert.equal(taylorRule({ pi: 4, gap: 0, ...T1993 }), 7.0);
+  // π = 2, u − u* = +1, Okun 2 → gap −2 → 2 + 2 + 0 + 0.5·(−2) = 3.0
+  const gap = okunGap(5, 4, 2);
+  assert.equal(gap, -2);
+  assert.equal(taylorRule({ pi: 2, gap, ...T1993 }), 3.0);
+  // Defaults are Taylor (1993).
+  assert.equal(taylorRule({ pi: 2, gap: 0 }), 4.0);
+});
+
+test("taylorRule: balanced approach and general weights", () => {
+  const B = TAYLOR_PRESETS.balanced;
+  assert.deepEqual(B, { rStar: 2, piStar: 2, aPi: 0.5, aY: 1.0 });
+  // gap −2 with a_y = 1 → 2 + 2 + 0 − 2 = 2.0
+  assert.equal(taylorRule({ pi: 2, gap: -2, ...B }), 2.0);
+  // r* = 0.5 shifts the rate down exactly 1.5 points.
+  assert.equal(taylorRule({ pi: 3, gap: -1, ...T1993 }) - taylorRule({ pi: 3, gap: -1, ...T1993, rStar: 0.5 }), 1.5);
+  // Taylor principle: +1 point of inflation → +(1 + a_π) points.
+  close(taylorRule({ pi: 3.5, gap: 0, ...T1993 }) - taylorRule({ pi: 2.5, gap: 0, ...T1993 }), 1.5);
+  // Hand-computed: r*=1, π=3.2, π*=2, a_π=0.8, a_y=0.3, gap=−1.5 → 1 + 3.2 + 0.96 − 0.45 = 4.71
+  close(taylorRule({ pi: 3.2, gap: -1.5, rStar: 1, piStar: 2, aPi: 0.8, aY: 0.3 }), 4.71);
+});
+
+test("applyZLB: floors at 0 only when on", () => {
+  assert.equal(applyZLB(-3.2, true), 0);
+  assert.equal(applyZLB(-3.2, false), -3.2);
+  assert.equal(applyZLB(1.7, true), 1.7);
+  assert.equal(applyZLB(0, true), 0);
+});
+
+test("matchPreset: only r*, π*, a_π, a_y identify a preset", () => {
+  assert.equal(matchPreset({ rStar: 2, piStar: 2, aPi: 0.5, aY: 0.5, okun: 2.7 }), "taylor1993");
+  // Starting from Taylor (1993) and moving a_y to 1.0 → Balanced approach.
+  assert.equal(matchPreset({ ...T1993, aY: 1.0 }), "balanced");
+  assert.equal(matchPreset({ ...T1993, aY: 0.1 + 0.2 + 0.7 }), "balanced"); // float noise tolerated
+  assert.equal(matchPreset({ ...T1993, rStar: 0.5 }), "custom");
+  assert.equal(matchPreset({ ...T1993, aPi: 0.6 }), "custom");
+  assert.equal(matchPreset({}), "custom");
+});
+
+// ---------- M8: NROU trimming, step-fill, alignment ----------
+
+// CBO's NROU (quarterly) runs years past the latest data; the tail is projections.
+const NROU_FIXTURE = [
+  { date: "2025-10-01", value: 4.33 },
+  { date: "2026-01-01", value: 4.32 },
+  { date: "2026-04-01", value: 4.31 },
+  { date: "2026-07-01", value: 4.3 },
+  { date: "2026-10-01", value: 4.29 }, // projection
+  { date: "2027-01-01", value: 4.28 }, // projection
+  { date: "2036-07-01", value: 4.2 }, // projection
+];
+
+test("trimToLatest: drops NROU projections dated after the latest UNRATE observation", () => {
+  const trimmed = trimToLatest(NROU_FIXTURE, "2026-09-01");
+  assert.deepEqual(
+    trimmed.map((o) => o.date),
+    ["2025-10-01", "2026-01-01", "2026-04-01", "2026-07-01"]
+  );
+  // The quarter that starts in the latest UNRATE month is kept; the next one isn't.
+  assert.equal(trimToLatest(NROU_FIXTURE, "2026-07-01").at(-1).date, "2026-07-01");
+  assert.equal(trimToLatest(NROU_FIXTURE, "2026-06-01").at(-1).date, "2026-04-01");
+  assert.notEqual(trimToLatest(NROU_FIXTURE), NROU_FIXTURE, "returns a copy");
+  assert.deepEqual(trimToLatest(undefined, "2026-01-01"), []);
+});
+
+test("stepFillMonthly: each quarter's value is held for its three months", () => {
+  const filled = stepFillMonthly(trimToLatest(NROU_FIXTURE, "2026-09-01"));
+  assert.equal(filled.length, 12);
+  assert.deepEqual(filled.slice(-4), [
+    { date: "2026-06-01", value: 4.31 },
+    { date: "2026-07-01", value: 4.3 },
+    { date: "2026-08-01", value: 4.3 },
+    { date: "2026-09-01", value: 4.3 },
+  ]);
+  // A missing quarter isn't filled across: Q1 holds 3 months, then Q3 starts.
+  const gappy = stepFillMonthly([
+    { date: "2020-01-01", value: 5 },
+    { date: "2020-07-01", value: 6 },
+  ]);
+  assert.deepEqual(
+    gappy.map((o) => `${o.date}=${o.value}`),
+    ["2020-01-01=5", "2020-02-01=5", "2020-03-01=5", "2020-07-01=6", "2020-08-01=6", "2020-09-01=6"]
+  );
+  assert.deepEqual(stepFillMonthly([]), []);
+});
+
+test("alignMonthly: inner join by month, never by array index", () => {
+  // Different lengths, different start months, one gap: index-based pairing would mismatch every row.
+  const a = monthly("2020-01-01", [1, 2, 3, 4, 5]).filter((o) => o.date !== "2020-03-01");
+  const b = monthly("2020-02-01", [20, 30, 40, 50, 60, 70]);
+  assert.deepEqual(alignMonthly({ a, b }), [
+    { date: "2020-02-01", a: 2, b: 20 },
+    { date: "2020-04-01", a: 4, b: 40 },
+    { date: "2020-05-01", a: 5, b: 50 },
+  ]);
+  // Day-of-month doesn't matter (dates are matched by month).
+  assert.deepEqual(alignMonthly({ a: [{ date: "2020-01-15", value: 1 }], b: [{ date: "2020-01-01", value: 2 }] }), [
+    { date: "2020-01-01", a: 1, b: 2 },
+  ]);
+  assert.deepEqual(alignMonthly({}), []);
+});
+
+test("taylorInputs: NROU trimmed + step-filled, joined by date; FEDFUNDS outer-joined", () => {
+  const unrate = monthly("2026-05-01", [4.4, 4.5, 4.6, 4.7, 4.8]); // May–Sep 2026
+  const inflation = monthly("2026-05-01", [2.8, 2.9, 3.0, 3.1]); // May–Aug (one month behind)
+  const fedfunds = monthly("2026-06-01", [3.9, 3.9, 3.8, 3.6]); // Jun–Sep
+  const rows = taylorInputs({ inflation, unrate, nrou: NROU_FIXTURE, fedfunds });
+  assert.deepEqual(rows, [
+    { date: "2026-05-01", pi: 2.8, u: 4.4, uStar: 4.31, actual: null },
+    { date: "2026-06-01", pi: 2.9, u: 4.5, uStar: 4.31, actual: 3.9 },
+    { date: "2026-07-01", pi: 3.0, u: 4.6, uStar: 4.3, actual: 3.9 },
+    { date: "2026-08-01", pi: 3.1, u: 4.7, uStar: 4.3, actual: 3.8 },
+    { date: "2026-09-01", pi: null, u: null, uStar: null, actual: 3.6 },
+  ]);
+  // No projection month (Oct 2026 onward) ever appears.
+  assert.ok(rows.every((r) => r.date <= "2026-09-01"));
+
+  // Fixed u* replaces NROU for every month.
+  const fixed = taylorInputs({ inflation, unrate, nrou: NROU_FIXTURE, uStarFixed: 4.5, fedfunds: null });
+  assert.deepEqual(fixed.map((r) => r.uStar), [4.5, 4.5, 4.5, 4.5]);
+  assert.ok(fixed.every((r) => r.actual === null));
+});
+
+test("taylorSeries: rule per month, ZLB floor, latest complete row", () => {
+  const rows = [
+    { date: "2009-06-01", pi: 1.0, u: 9.5, uStar: 5.0, actual: 0.21 }, // deep slack
+    { date: "2019-12-01", pi: 2.0, u: 4.0, uStar: 4.0, actual: 1.55 }, // on target, no gap
+    { date: "2020-01-01", pi: 4.0, u: 5.0, uStar: 4.0, actual: 1.55 },
+    { date: "2020-02-01", pi: null, u: null, uStar: null, actual: 1.58 },
+  ];
+  const off = taylorSeries(rows, { ...T1993, okun: 2, zlb: false });
+  // 2009-06: gap = −2(9.5 − 5) = −9 → 2 + 1 + 0.5(−1) + 0.5(−9) = −2.0
+  assert.equal(off[0].gap, -9);
+  close(off[0].raw, -2.0);
+  close(off[0].rule, -2.0, "below zero with ZLB off");
+  assert.equal(off[1].rule, 4.0);
+  // π = 4, gap = −2 → 2 + 4 + 1 − 1 = 6.0
+  assert.equal(off[2].rule, 6.0);
+  assert.equal(off[3].rule, null);
+
+  const on = taylorSeries(rows, { ...T1993, okun: 2, zlb: true });
+  assert.equal(on[0].rule, 0, "floored at 0 with ZLB on");
+  close(on[0].raw, -2.0, "raw keeps the unfloored value");
+  assert.equal(on[1].rule, 4.0, "positive values untouched");
+
+  assert.equal(latestComplete(off).date, "2020-01-01");
+  assert.equal(latestRule(off).date, "2020-01-01");
+  assert.equal(latestComplete([{ ...rows[0], rule: 1, actual: null }]), null);
+  assert.equal(latestComplete([]), null);
+
+  // Okun coefficient flows through: k = 3 → gap −3 for u − u* = 1 → 2 + 4 + 1 − 1.5 = 5.5
+  assert.equal(taylorSeries([rows[2]], { ...T1993, okun: 3 })[0].rule, 5.5);
+});
+
+// ---------- M8: "Right now" sentences ----------
+
+const RN = POLICY_LAB.taylor.rightNow;
+
+test("compareAtDisplay: compares values rounded as shown", () => {
+  assert.deepEqual(compareAtDisplay(4.64, 4.04), { diff: 0.6, direction: "higher", x: "0.6" });
+  assert.deepEqual(compareAtDisplay(3.0, 4.33), { diff: -1.3, direction: "lower", x: "1.3" });
+  // 4.04 → 4.0 and 3.96 → 4.0: same as displayed even though the raw gap is 0.08.
+  assert.deepEqual(compareAtDisplay(4.04, 3.96), { diff: 0, direction: "same", x: "0.0" });
+});
+
+test("taylorRightNow: higher / lower / same / floored, note always last", () => {
+  assert.deepEqual(taylorRightNow({ rule: 4.64, raw: 4.64, actual: 4.04, zlb: false }, RN), [
+    "The rule says rates should be 0.6 points higher than they are.",
+    RN.note,
+  ]);
+  assert.deepEqual(taylorRightNow({ rule: 3, raw: 3, actual: 4.33, zlb: false }, RN), [
+    "The rule says rates should be 1.3 points lower than they are.",
+    RN.note,
+  ]);
+  assert.deepEqual(taylorRightNow({ rule: 4.04, raw: 4.04, actual: 3.96, zlb: true }, RN), [RN.same, RN.note]);
+  // ZLB on, rule negative: compared as shown (0.0 vs 0.04 → 0.0: same) plus the unfloored value.
+  assert.deepEqual(taylorRightNow({ rule: 0, raw: -3.24, actual: 0.04, zlb: true }, RN), [
+    RN.same,
+    "The rule is shown at 0 because the zero-lower-bound toggle is on; without it, the rule would be −3.2%.",
+    RN.note,
+  ]);
+  // ZLB off: no floored line even when negative.
+  assert.deepEqual(taylorRightNow({ rule: -3.24, raw: -3.24, actual: 0.08, zlb: false }, RN), [
+    "The rule says rates should be 3.3 points lower than they are.",
+    RN.note,
+  ]);
+  // No actual rate (FEDFUNDS failed): just the note.
+  assert.deepEqual(taylorRightNow({ rule: 2, raw: 2, actual: null, zlb: false }, RN), [RN.note]);
+  assert.equal(fillTemplate("{a} and {b}", { a: 1 }), "1 and ");
 });

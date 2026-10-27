@@ -77,3 +77,45 @@ export function yieldCurveSentence(yc) {
     yc.invertedMonths > 1 ? ` It has been inverted for ${yc.invertedMonths} months in a row.` : "";
   return `${when} the 10-year Treasury yield averaged ${gap} points below the 3-month yield, so the yield curve was inverted.${streak}`;
 }
+
+// ---------- M8: Policy Lab "Right now" ----------
+
+/** Fill "{x}"-style placeholders; unknown keys become "". */
+export function fillTemplate(template, values = {}) {
+  return String(template ?? "").replace(/\{(\w+)\}/g, (_, k) => (values[k] ?? "") + "");
+}
+
+/**
+ * Compare a rule rate with the actual rate at display precision, so the sentence agrees with the numbers
+ * shown: diff = round(rule) − round(actual). `direction` is "higher" | "lower" | "same" (rounds to 0.0).
+ * `x` is the absolute difference as displayed, e.g. "0.6".
+ */
+export function compareAtDisplay(rule, actual, digits = 1) {
+  const r = Number(Number(rule).toFixed(digits));
+  const a = Number(Number(actual).toFixed(digits));
+  const diff = Number((r - a).toFixed(digits));
+  const direction = diff > 0 ? "higher" : diff < 0 ? "lower" : "same";
+  return { diff: diff === 0 ? 0 : diff, direction, x: Math.abs(diff).toFixed(digits) };
+}
+
+/**
+ * Plain-English "Right now" sentences for the Taylor rule, using the copy templates passed in
+ * (content.js POLICY_LAB.taylor.rightNow: higher, lower, same, floored, note).
+ * - Comparison (higher/lower/same) uses the rule rate as shown (floored when the ZLB toggle is on).
+ * - `floored` is added when the ZLB is on and the unfloored rule is negative (at 1 decimal); {x} = the unfloored rate.
+ * - `note` is always last. With no actual rate, only the floored line (if any) and the note are returned.
+ * @param {{rule: number, raw: number, actual: number|null, zlb: boolean}} r
+ * @param {{higher: string, lower: string, same: string, floored: string, note: string}} copy
+ * @returns {string[]}
+ */
+export function taylorRightNow({ rule, raw, actual, zlb }, copy) {
+  const out = [];
+  if (Number.isFinite(actual) && Number.isFinite(rule)) {
+    const c = compareAtDisplay(rule, actual, 1);
+    out.push(fillTemplate(copy[c.direction], { x: c.x }));
+  }
+  // Only when the unfloored rate is negative as displayed (−0.04 would read "0.0%").
+  if (zlb && Number.isFinite(raw) && Number(raw.toFixed(1)) < 0) out.push(fillTemplate(copy.floored, { x: formatNumber(raw, 1) }));
+  out.push(copy.note);
+  return out;
+}

@@ -1,0 +1,144 @@
+/* Policy Lab page styles (owned by the econ-modeling-engineer agent). Builds on styles.css tokens
+   (--surface, --border, --brand, --c1/--c2, --recession, --ref-line) so light/dark mode follow the site. */
+
+.lab { --accent: var(--brand); }
+.lab .site-head p { max-width: 75ch; }
+.taylor > h2 { margin: 24px 0 2px; font-size: 1.4rem; }
+.lab-lead { margin: 0 0 14px; color: var(--muted); }
+.muted { color: var(--muted); }
+
+/* Layout: chart + "Right now" on the left, controls on the right; one column on small screens. */
+.lab-grid {
+  display: grid; gap: 16px; align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-rows: auto 1fr; /* row 2 absorbs the tall controls column, so "Right now" sits under the chart */
+  grid-template-areas: "chart controls" "now controls";
+}
+.chart-card { grid-area: chart; }
+.controls { grid-area: controls; }
+.right-now { grid-area: now; }
+@media (max-width: 900px) {
+  .lab-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "chart" "now" "controls"; }
+}
+
+.lab h3 { margin: 0; font-size: 1.1rem; }
+.lab h4 { margin: 16px 0 4px; font-size: 1rem; }
+
+/* Chart card. */
+.chart-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.lab-chart { height: 380px; }
+.loading { margin: 14px 0; color: var(--muted); }
+.chart-card.no-data .lab-chart { display: none; }
+.chart-card:not(.no-data) .loading { display: none; }
+.key-line::before { height: 0; border-radius: 0; width: 18px; border-top: 3px solid; }
+.key-rule::before { border-color: var(--c1); }
+.key-actual::before { border-color: var(--c2); }
+.key-ref::before { border-top-style: solid; }
+
+/* Segmented buttons (range, presets): bigger tap targets than the dashboard's. */
+.lab .seg button { min-height: 36px; padding: 6px 12px; }
+.lab .seg button:hover { background: var(--bg); }
+.lab .seg button[aria-pressed="true"] { background: var(--brand); color: var(--surface); }
+
+/* Controls. */
+.controls { display: flex; flex-direction: column; gap: 4px; }
+.controls fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.controls legend, .field > label, .slider-head label { font-weight: 600; font-size: 0.92rem; padding: 0; }
+.presets { margin-top: 10px; }
+.controls fieldset.field { margin-top: 14px; }
+/* Presets: separate pill buttons that wrap cleanly instead of one joined segment. */
+.lab .preset-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; border: 0; background: none; overflow: visible; }
+.lab .preset-buttons button { border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.lab .preset-buttons button + button { border-left: 1px solid var(--border); }
+.lab .preset-buttons button[aria-pressed="true"] { border-color: var(--brand); }
+.preset-desc { margin: 6px 0 0; font-size: 0.85rem; color: var(--muted); }
+.field { margin-top: 14px; }
+.help { margin: 2px 0 0; font-size: 0.82rem; color: var(--muted); }
+.help.why { margin-top: 8px; }
+.slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.val {
+  font-weight: 700; font-variant-numeric: tabular-nums; color: var(--brand);
+  min-width: 4.5ch; text-align: right; font-size: 1rem;
+}
+
+/* Range sliders: 44px-tall hit area and a large thumb so they work with a thumb on phones. */
+.slider input[type="range"] {
+  -webkit-appearance: none; appearance: none; display: block;
+  width: 100%; height: 44px; margin: 0; background: transparent; cursor: pointer;
+}
+.slider input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--muted); }
+.slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 28px; height: 28px; margin-top: -11px; border-radius: 50%;
+  background: var(--brand); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--brand);
+}
+.slider input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--muted); }
+.slider input[type="range"]::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--brand); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--brand);
+}
+.slider input[type="range"]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+
+select {
+  display: block; width: 100%; margin-top: 4px; min-height: 40px; padding: 6px 10px; font: inherit; font-size: 0.95rem;
+  color: var(--text); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px;
+}
+select:focus-visible, .radios input:focus-visible, .check input:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.radios { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.radios label, .check { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 0.92rem; cursor: pointer; }
+.check { font-weight: 600; }
+.radios input, .check input { width: 20px; height: 20px; margin: 0; accent-color: var(--brand); flex-shrink: 0; }
+.radios input:disabled + span { color: var(--muted); text-decoration: line-through; }
+.notice { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; font-size: 0.85rem; background: var(--error-bg); color: var(--error-text); }
+.share { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.share-btn { min-height: 40px; font-size: 0.9rem; font-weight: 600; }
+.share-status { margin: 6px 0 0; font-size: 0.85rem; color: var(--muted); min-height: 1.2em; }
+
+/* "Right now" readout (F33). */
+.right-now.no-data { display: none; } /* nothing to show while loading or when a rule input failed */
+.right-now .as-of { margin: 2px 0 10px; color: var(--muted); font-size: 0.85rem; }
+.rn-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.rn-item.big { grid-column: span 1; }
+.rn-help-line { margin: 8px 0 0; font-size: 0.78rem; color: var(--muted); }
+.rn-item { min-width: 0; }
+.rn-item dt { font-size: 0.8rem; color: var(--muted); }
+.rn-item dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rn-item.big dd:not(.rn-help) { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+.rn-item.rule dd:not(.rn-help) { color: var(--c1); }
+.rn-item.actual dd:not(.rn-help) { color: var(--c2); }
+.rn-item .rn-help { font-size: 0.75rem; font-weight: 400; color: var(--muted); }
+.rn-sentences { margin-top: 12px; }
+.rn-sentence { margin: 0 0 4px; font-weight: 600; }
+.rn-note { margin: 4px 0 0; font-size: 0.85rem; color: var(--muted); }
+.formula {
+  margin: 6px 0 0; padding: 8px 10px; background: var(--bg); border-radius: 8px; overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88rem; font-variant-numeric: tabular-nums;
+}
+.formula-main { font-weight: 600; }
+.formula-symbols { color: var(--muted); }
+
+/* Explainer, try this, sources (F39). */
+.explainer, .try-this, .sources { margin-top: 16px; }
+.explainer p, .try-this li, .sources p { max-width: 80ch; }
+.explainer p { margin: 8px 0 0; }
+.explainer .formula { max-width: 60ch; }
+.glossary { margin-top: 10px; }
+.glossary summary { cursor: pointer; font-weight: 600; color: var(--brand); min-height: 32px; display: list-item; }
+.glossary summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.terms { margin: 6px 0 0; }
+.terms dt { font-weight: 600; margin-top: 8px; }
+.terms dd { margin: 0; color: var(--muted); font-size: 0.92rem; }
+.sym { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--brand); }
+.caveats, .try-this ul { margin: 6px 0 0; padding-left: 1.2em; }
+.caveats li + li, .try-this li + li { margin-top: 6px; }
+.source-list { margin: 8px 0 0; padding-left: 1.2em; font-size: 0.88rem; overflow-wrap: anywhere; }
+.source-list li + li { margin-top: 4px; }
+.sources { margin-bottom: 32px; }
+
+@media (max-width: 480px) {
+  .lab-chart { height: 260px; }
+  .taylor > h2 { font-size: 1.25rem; }
+  .rn-grid { grid-template-columns: 1fr 1fr; }
+  .rn-item.big dd:not(.rn-help) { font-size: 1.3rem; }
+  .lab .range { display: flex; width: 100%; flex-wrap: nowrap; }
+  .lab .range button { flex: 1 1 auto; padding: 6px 4px; white-space: nowrap; font-size: 0.82rem; }
+}

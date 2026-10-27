@@ -4,13 +4,94 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Policy Lab · FRED Macro Dashboard</title>
-  <meta name="description" content="Taylor rule, Phillips curve and policy stance with live FRED data. Coming soon.">
+  <meta name="description" content="Taylor rule lab: set the neutral rate, inflation target and weights, then compare the rule-implied interest rate with the actual federal funds rate using live FRED data.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="policy.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
   <script type="module" src="policy.js"></script>
 </head>
 <body data-page="policy">
-  <!-- "Coming soon" stub (M6, owner: econ-modeling-engineer). Nav, footer and copy come from lib/nav.js + content.js. -->
-  <main class="wrap" id="main"></main>
+  <!-- Policy Lab (owner: econ-modeling-engineer). Nav/footer from lib/nav.js; all copy from content.js
+       (POLICY_LAB), rendered with textContent by policy.js; math in lib/econ.js. -->
+  <main class="wrap lab" id="main">
+    <header class="site-head">
+      <h1 id="lab-title"></h1>
+      <p id="lab-intro"></p>
+    </header>
+
+    <section class="taylor" id="taylor" aria-labelledby="taylor-heading">
+      <h2 id="taylor-heading"></h2>
+      <p class="lab-lead" id="taylor-lead"></p>
+      <p id="shading-status" class="shading-status" role="status" hidden></p>
+
+      <div class="lab-grid">
+        <article class="card chart-card no-data" id="chart-card" aria-labelledby="chart-heading">
+          <div class="chart-head">
+            <h3 id="chart-heading"></h3>
+            <div class="seg range" id="range" role="group" aria-label="Time range"></div>
+          </div>
+          <p class="loading" id="chart-loading">Loading…</p>
+          <div class="chart-wrap lab-chart"><canvas id="taylor-chart" role="img"></canvas></div>
+          <p class="chart-legend" id="chart-legend"></p>
+          <p class="error" id="chart-error" role="status" hidden></p>
+          <div class="chart-tools">
+            <button type="button" class="tool" id="table-toggle" aria-expanded="false" aria-controls="taylor-table"></button>
+          </div>
+          <div class="table-wrap" id="taylor-table" role="region" tabindex="0" hidden></div>
+        </article>
+
+        <form class="card controls" id="controls" aria-labelledby="controls-heading" novalidate>
+          <h3 id="controls-heading"></h3>
+          <fieldset class="presets">
+            <legend id="presets-label"></legend>
+            <div class="seg preset-buttons" id="preset-buttons"></div>
+            <p class="preset-desc" id="preset-desc" aria-live="polite"></p>
+          </fieldset>
+          <div id="sliders"></div>
+          <div class="field">
+            <label for="inflation-select" id="inflation-label"></label>
+            <select id="inflation-select"></select>
+            <p class="help" id="inflation-note"></p>
+            <p class="help why" id="inflation-why"></p>
+          </div>
+          <fieldset class="field ustar" id="ustar-field">
+            <legend id="ustar-legend"></legend>
+            <div class="radios">
+              <label><input type="radio" name="ustar-mode" value="cbo" checked> <span id="ustar-cbo"></span></label>
+              <label><input type="radio" name="ustar-mode" value="fixed"> <span id="ustar-fixed"></span></label>
+            </div>
+            <div id="ustar-slider"></div>
+            <p class="help" id="ustar-help"></p>
+            <p class="notice" id="ustar-fallback" role="status" hidden></p>
+          </fieldset>
+          <div class="field zlb">
+            <label class="check"><input type="checkbox" id="zlb" aria-describedby="zlb-help"> <span id="zlb-label"></span></label>
+            <p class="help" id="zlb-help"></p>
+          </div>
+          <div class="share">
+            <button type="button" class="tool share-btn" id="copy-link"></button>
+            <p class="share-status" id="share-status" role="status"></p>
+          </div>
+        </form>
+
+        <section class="card right-now no-data" id="right-now" aria-labelledby="rn-heading">
+          <h3 id="rn-heading"></h3>
+          <p class="as-of" id="rn-asof"></p>
+          <dl class="rn-grid" id="rn-grid"></dl>
+          <p class="rn-help-line" id="rn-actual-help"></p>
+          <div class="rn-sentences" id="rn-sentences" aria-live="polite"></div>
+          <h4 id="rn-formula-heading"></h4>
+          <p class="formula formula-symbols" id="rn-formula-symbols"></p>
+          <p class="formula" id="rn-gap-formula"></p>
+          <p class="formula formula-main" id="rn-formula"></p>
+        </section>
+      </div>
+
+      <section class="card explainer" id="explainer" aria-labelledby="explainer-heading"></section>
+      <section class="card try-this" id="try-this" aria-labelledby="try-heading"></section>
+      <section class="card sources" id="sources" aria-labelledby="sources-heading"></section>
+    </section>
+  </main>
 </body>
 </html>
