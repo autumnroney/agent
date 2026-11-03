@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Labor Market · FRED Macro Dashboard</title>
+  <meta name="description" content="Unemployment in Florida and the U.S., payroll jobs, wages and job openings from the Bureau of Labor Statistics, explained for intro macroeconomics students.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+  <script type="module" src="labor.js"></script>
+</head>
+<body data-page="labor">
+  <!-- Nav and footer come from lib/nav.js; all copy from content.js (LABOR); charts via lib/charts.js. -->
+  <main class="wrap" id="main">
+    <header class="site-head">
+      <h1 id="labor-title"></h1>
+      <p id="labor-intro"></p>
+    </header>
+
+    <div class="toolbar">
+      <span id="range-label">Time range</span>
+      <div id="range" role="group" aria-labelledby="range-label"></div>
+      <p id="shading-status" class="shading-status" role="status" hidden></p>
+    </div>
+
+    <section id="cards" aria-label="Labor market indicators"></section>
+
+    <p id="labor-source" class="labor-note"></p>
+    <p id="labor-revisions" class="labor-note"></p>
+  </main>
+</body>
+</html>

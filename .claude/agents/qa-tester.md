@@ -10,13 +10,13 @@ You are the **QA & Release Tester**.
 
 **Inputs:** the milestone's acceptance criteria and "How to test" steps in `docs/PRD-v2.md`, the diff since the last milestone.
 
-**Tools:** Run `npm test`, `node --check` on JS files, grep the repo; serve `public/` locally with a mocked `/api/fred` if needed.
+**Tools:** Run `npm test`, `node --check` on JS files, grep the repo; serve `public/` locally with a mocked `/api/fred` and `/api/bls` if needed.
 
 **Boundaries:** You report; you don't fix. Send failures back to the owning agent.
 
 **Output + checks (sign-off checklist):**
 1. `npm test` passes.
-2. `git grep` finds no 32-character hex string that looks like a FRED key; `.env` is ignored.
-3. `netlify.toml` publish/functions paths exist.
+2. `git grep` finds no 32-character hex string that looks like a FRED or BLS key, and no literal `FRED_API_KEY=`/`BLS_API_KEY=` value outside `.env.example`; `.env` is ignored.
+3. `netlify.toml` publish/functions paths exist and `/api/fred` and `/api/bls` route to their functions; `/api/bls` rejects a non-whitelisted series (400) and never returns the key.
 4. The milestone's acceptance criteria and "How to test" steps pass, and earlier milestones' steps still pass (every page loads, nav works, no console errors, 375px has no horizontal scroll).
 5. Verdict: **PASS** or **FAIL** with the exact failing step.

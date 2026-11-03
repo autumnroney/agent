@@ -90,6 +90,73 @@ export const SOURCES = {
   USREC: "Federal Reserve Bank of St. Louis", // based on NBER recession dates
   T10Y3M: "Federal Reserve Bank of St. Louis",
   NROU: "U.S. Congressional Budget Office",
+  // BLS Public Data API series (Labor Market page, M13).
+  LASST120000000000003: "U.S. Bureau of Labor Statistics",
+  LNS14000000: "U.S. Bureau of Labor Statistics",
+  CES0500000003: "U.S. Bureau of Labor Statistics",
+  CES0000000001: "U.S. Bureau of Labor Statistics",
+  JTS000000000000000JOL: "U.S. Bureau of Labor Statistics",
+};
+
+// Labor Market page (labor.html), M13. Everything here is PLAIN TEXT (render with textContent).
+// Placeholders in {braces} are filled by labor.js. No current numbers here: the page shows live values.
+export const LABOR = {
+  heading: "Labor Market",
+  intro:
+    "The Fed's job is stable prices and maximum employment. These four charts show the employment side: who is out of work, how many jobs the economy is adding, what those jobs pay, and how many employers are still hiring. Compare Florida with the nation, too.",
+  sourceLine:
+    "Data: U.S. Bureau of Labor Statistics (BLS), seasonally adjusted, monthly. Shaded bands mark recessions as dated by the NBER.",
+  revisionsNote:
+    "The most recent months are preliminary, meaning first estimates based on incomplete survey responses. BLS revises them as more answers come in, and again once a year, so a number you see today may change.",
+
+  cards: {
+    unemployment: {
+      title: "Unemployment rate: Florida vs. U.S.",
+      whatItIs:
+        "The share of the labor force (people working plus people looking for work) who are unemployed. You count as unemployed only if you have no job, are available to work, and looked for one in the past four weeks. The U.S. rate comes from a monthly survey of about 60,000 households, the Current Population Survey (CPS).",
+      whyItMatters:
+        "Maximum employment is half of the Fed's mandate. A rising rate signals slack (unused workers), which tends to ease wage and price pressure; a very low rate can mean a tight market where employers compete for workers.",
+      goodToKnow:
+        "Florida's rate is a model-based estimate, because the national survey is too small to measure one state on its own. BLS combines survey, payroll and unemployment-insurance data, then revises state rates each March. Small month-to-month gaps between Florida and the U.S. can be noise.",
+    },
+    earnings: {
+      title: "Average hourly earnings",
+      whatItIs:
+        "Average pay per hour, in dollars, for all employees at private businesses, from the BLS survey of employers. These are nominal wages: dollars not adjusted for inflation.",
+      whyItMatters:
+        "Wages are both a cost for businesses and income for households. Wage growth well above inflation plus productivity growth can add to price pressure, so the Fed watches it closely.",
+      goodToKnow:
+        "To get real wage growth (gains in buying power), subtract inflation over the same 12 months. The average can also move because of who is working: in spring 2020 it jumped because many lower-paid workers lost jobs, not because anyone got a raise.",
+    },
+    payrolls: {
+      title: "Nonfarm payroll employment",
+      whatItIs:
+        "The number of jobs at U.S. businesses and government agencies, excluding farm work, in thousands. It comes from the Current Employment Statistics (CES) survey of employers, a different survey from the household one behind the unemployment rate.",
+      whyItMatters:
+        "The headline “jobs report” number is the change from the previous month: how many jobs the economy added or lost. It is one of the fastest, broadest reads on whether the economy is growing.",
+      goodToKnow:
+        "It counts jobs, not people, so someone with two jobs counts twice. Each month's figure is revised in the next two reports and again in an annual benchmark, so first estimates can change noticeably.",
+    },
+    openings: {
+      title: "Job openings",
+      whatItIs:
+        "The number of unfilled positions employers are actively trying to fill on the last business day of the month, from the Job Openings and Labor Turnover Survey (JOLTS).",
+      whyItMatters:
+        "Openings show labor demand. A common gauge of how tight the market is: openings per unemployed person. Above 1 means more open jobs than people looking, so employers must compete harder for workers.",
+      goodToKnow:
+        "JOLTS comes out about a month after the jobs report for the same month, so its latest month is usually one month behind payrolls. An opening is a posted job, not a hire; some postings go unfilled for a long time.",
+    },
+  },
+
+  templates: {
+    gap: "Florida is {gap} percentage points {dir} the U.S. rate.",
+    above: "above",
+    below: "below",
+    equal: "Florida matches the U.S. rate.",
+    yoy: "{change} vs. a year earlier",
+    monthChange: "{change} jobs vs. the previous month",
+    preliminary: "preliminary",
+  },
 };
 
 // Shared footer on every page (plain text).

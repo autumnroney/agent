@@ -9,6 +9,7 @@ Built by Autumn Roney (M.S. Economics, FAU) for ISM 6427C with a team of Claude 
 | Page | URL | Status |
 |---|---|---|
 | Dashboard | `/` | Four live charts with range buttons, latest value, change vs. a year earlier |
+| Labor Market | `/labor.html` | BLS data (M13): Florida vs. U.S. unemployment, average hourly earnings, nonfarm payrolls, job openings; recession shading, CSV + data table |
 | Policy Lab | `/policy.html` | Coming soon (M8–M9) |
 | Quiz | `/quiz.html` | Coming soon (M10) |
 | Class Mode | `/present.html` | Coming soon (M11) |
@@ -32,9 +33,19 @@ The function proxies only these FRED series (PRD-v2 §5.1). Units and frequency 
 | NROU | CBO noncyclical rate of unemployment (u*) | `lin` | Quarterly, **includes CBO projections** | Policy Lab (M8) |
 | T10Y3M | 10-year minus 3-month Treasury spread | `lin`, `frequency=m`, `aggregation_method=avg` | Daily → monthly average | Recession Watch (M7) |
 
+The second function, `netlify/functions/bls.mjs`, proxies only these BLS series (M13). All are monthly and seasonally adjusted.
+
+| BLS series | What | Units | Survey | Used on |
+|---|---|---|---|---|
+| LASST120000000000003 | Florida unemployment rate | % | LAUS (model-based, revised each March) | Labor Market |
+| LNS14000000 | U.S. unemployment rate | % | CPS (household survey) | Labor Market |
+| CES0500000003 | Average hourly earnings, all private employees | dollars per hour | CES (establishment survey) | Labor Market |
+| CES0000000001 | Total nonfarm payroll employment | thousands of jobs | CES | Labor Market |
+| JTS000000000000000JOL | Job openings, total nonfarm | thousands | JOLTS | Labor Market |
+
 ## How it works
 
-`public/` is a static multi-page site (HTML/CSS/vanilla ES modules + Chart.js 4.4.1 from cdnjs, no build step). Pages load data with `getSeries(id, {start})` from `public/lib/fred-client.js`, which calls `/api/fred`, turns failures into readable messages, shares in-flight requests and caches responses in `sessionStorage` for an hour, so moving between pages doesn't refetch. `netlify.toml` routes `/api/fred` to the Netlify Function `netlify/functions/fred.mjs`, which adds the API key from the `FRED_API_KEY` environment variable, so the key never reaches the browser or the repo.
+`public/` is a static multi-page site (HTML/CSS/vanilla ES modules + Chart.js 4.4.1 from cdnjs, no build step). Pages load data with `getSeries(id, {start})` from `public/lib/fred-client.js`, which calls `/api/fred`, turns failures into readable messages, shares in-flight requests and caches responses in `sessionStorage` for an hour, so moving between pages doesn't refetch. `netlify.toml` routes `/api/fred` to the Netlify Function `netlify/functions/fred.mjs`, which adds the API key from the `FRED_API_KEY` environment variable, so the key never reaches the browser or the repo. The Labor Market page works the same way: `getBlsSeries` from `public/lib/bls-client.js` calls `/api/bls`, which `netlify.toml` routes to `netlify/functions/bls.mjs`; that function adds `BLS_API_KEY` server-side.
 
 ### API contract
 
@@ -46,16 +57,26 @@ The function proxies only these FRED series (PRD-v2 §5.1). Units and frequency 
 - A whitelist entry may carry a server-side frequency/aggregation (only T10Y3M does: monthly average, dated the 1st of each month). Any `units`, `frequency` or `aggregation_method` in the query string is ignored.
 - NROU comes back exactly as FRED sends it, CBO projections included. Clients must drop observations after the latest UNRATE date (`lib/econ.js`, M8).
 
+`GET /api/bls?series=ID&start=YYYY-MM-DD` (`start` optional) →
+`{ series, title, units, frequency: "Monthly", source: "U.S. Bureau of Labor Statistics", observations: [{ date, value, preliminary? }] }` with `Cache-Control: public, max-age=3600`. Same shape as `/api/fred` plus `source`.
+
+- Unknown series → 400; malformed `start` → 400; missing key → 500 with a setup hint; BLS failure (network, HTTP error, or `status` other than `REQUEST_SUCCEEDED`) → 502.
+- At most 20 years per request (BLS v2 limit): default window is the last 20 calendar years, and an earlier `start` is clamped.
+- Annual averages (`M13`) and non-numeric values (`"-"`) are dropped; dates are the 1st of each month, oldest first. `preliminary: true` marks observations BLS footnotes as preliminary.
+- The BLS key allows 500 queries a day; the one-hour CDN/browser cache keeps usage far below that.
+
 ## Deploy on Netlify (one time)
 
 1. Netlify → **Add new site → Import an existing project → GitHub** → pick this repo. Leave the build settings blank; `netlify.toml` handles them.
-2. **Site configuration → Environment variables** → add `FRED_API_KEY` = your key (free at <https://fredaccount.stlouisfed.org/apikeys>).
-3. **Deploys → Trigger deploy**. After this, every push to the deployed branch redeploys automatically.
+2. **Site configuration → Environment variables** → add `FRED_API_KEY` = your key (free at <https://fredaccount.stlouisfed.org/apikeys>) and `BLS_API_KEY` = your BLS registration key (free at <https://data.bls.gov/registrationEngine/>). Never put a real key in the repo or `.env.example`.
+3. **Deploys → Trigger deploy** (needed after adding or changing a key). After this, every push to the deployed branch redeploys automatically.
 
 ## How to test the live site
 
 - `/api/fred?series=UNRATE` → JSON with observations. `/api/fred?series=USREC`, `?series=PCEPILFE`, `?series=NROU`, `?series=T10Y3M` → JSON; T10Y3M dates are the 1st of each month.
 - `/api/fred?series=DGS10` → 400 error.
+- `/api/bls?series=LNS14000000` → JSON with `source: "U.S. Bureau of Labor Statistics"`, monthly observations oldest first, no `M13` rows; the latest value matches UNRATE. Try each BLS id from the table above; `/api/bls?series=CUUR0000SA0` → 400; `/api/bls?series=LNS14000000&start=2024-13-01` → 400. View source of the response: the key never appears.
+- Open `/labor.html`: four cards load (Florida vs. U.S. unemployment with the gap sentence, hourly earnings with change vs. a year earlier, payrolls with change vs. the previous month, job openings in millions); recent months may be marked "(preliminary)". Compare with <https://www.bls.gov/news.release/empsit.toc.htm>.
 - Open `/`: four charts load, each with its latest value and date; the top bar shows Dashboard · Policy Lab · Quiz · Class Mode · About with Dashboard highlighted. Compare UNRATE with <https://fred.stlouisfed.org/series/UNRATE>.
 - Click **20Y**: charts reach back about 20 years and show the 2008–09 recession. Click **1Y**: only the last year.
 - Click **Policy Lab** → "Coming soon" page with the same nav. Click **Dashboard** → charts appear at once, and DevTools → Network shows no new `/api/fred` calls.
@@ -65,5 +86,5 @@ The function proxies only these FRED series (PRD-v2 §5.1). Units and frequency 
 ## Development
 
 ```
-npm test   # node:test unit tests: the function (FRED mocked), fred-client/format/nav, econ math. No key or network needed.
+npm test   # node:test unit tests: both functions (FRED and BLS mocked), fred-client/format/nav, econ math. No key or network needed.
 ```

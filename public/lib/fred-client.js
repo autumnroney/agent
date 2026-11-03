@@ -5,7 +5,7 @@
 
 const ID_RE = /^[A-Z0-9]{1,30}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const CACHE_PREFIX = "fred:v1:";
+const DEFAULT_CACHE_PREFIX = "fred:v1:";
 const DEFAULT_MAX_AGE_MS = 60 * 60 * 1000; // matches the function's Cache-Control: max-age=3600
 
 /** Every getSeries failure is a FredError with a student-readable message. */
@@ -33,10 +33,12 @@ function defaultStorage() {
 
 /**
  * Build a client. Pages use the default `getSeries` export; tests inject `fetch`, `storage` and `now`.
- * @param {{ fetch?: typeof fetch, storage?: Storage|null, endpoint?: string, maxAgeMs?: number, now?: () => number }} [opts]
+ * @param {{ fetch?: typeof fetch, storage?: Storage|null, endpoint?: string, cachePrefix?: string, sourceName?: string, maxAgeMs?: number, now?: () => number }} [opts]
  */
 export function createFredClient(opts = {}) {
   const endpoint = opts.endpoint ?? "/api/fred";
+  const CACHE_PREFIX = opts.cachePrefix ?? DEFAULT_CACHE_PREFIX; // separate prefix per upstream (FRED, BLS)
+  const sourceName = opts.sourceName ?? "FRED";
   const maxAgeMs = opts.maxAgeMs ?? DEFAULT_MAX_AGE_MS;
   const now = opts.now ?? (() => Date.now());
   const getFetch = () => opts.fetch ?? globalThis.fetch;
@@ -105,7 +107,7 @@ export function createFredClient(opts = {}) {
       });
     }
     if (body.observations.length === 0) {
-      throw new FredError("FRED returned no data for this series.", { series: id, status: res.status, kind: "empty" });
+      throw new FredError(`${sourceName} returned no data for this series.`, { series: id, status: res.status, kind: "empty" });
     }
     return body;
   }

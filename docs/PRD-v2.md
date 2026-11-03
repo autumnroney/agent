@@ -20,8 +20,9 @@ v2 adds, in build order:
 5. **Live-data Quiz** — questions generated from today's FRED data (never stale), concept questions with explanations, an "estimate first" calibration mode, and seeded quizzes so a whole class gets the same set.
 6. **Class Mode** — presentation slides that build themselves from live data, a "then vs. now" time machine, copy-ready citations and a printable one-page handout.
 7. **Hardening** — accessibility, performance, security headers, docs.
+8. **Labor Market page (M13, BLS)** — Florida vs. U.S. unemployment, average hourly earnings, payroll jobs and job openings from the BLS Public Data API. Built right after M8 (before M9) at the owner's request.
 
-Everything stays **static HTML/CSS/vanilla JS + Chart.js 4.4.1 (cdnjs) + the one existing Netlify Function**. No accounts, no database, no paid services, no new API keys.
+Everything stays **static HTML/CSS/vanilla JS + Chart.js 4.4.1 (cdnjs) + Netlify Functions**. No accounts, no database, no paid services. Exactly **one additional keyed API**: the BLS Public Data API v2, key in the Netlify env var `BLS_API_KEY`, called only through a second Netlify Function `/api/bls` (same pattern as `FRED_API_KEY` → `/api/fred`). No other new API keys.
 
 ---
 
@@ -113,7 +114,33 @@ API contract is unchanged: `GET /api/fred?series=ID&start=YYYY-MM-DD` → `{seri
 - **Sahm rule (Claudia Sahm, 2019):** recession signal when the 3-month moving average of the unemployment rate is ≥ 0.50 percentage points above its lowest 3-month average of the previous 12 months. It is a historical pattern, not a forecast; it triggered in mid-2024 without a recession being declared. Computed client-side from UNRATE as currently revised (FRED's real-time version uses first-release data, so values can differ slightly).
 - **Yield curve:** the 10-year minus 3-month spread turned negative before each U.S. recession since the late 1960s, with long and variable lead times, and stayed inverted from late 2022 into 2024 without a recession through that period. Present as a signal economists watch, never a prediction.
 - **Recessions:** dated by the NBER Business Cycle Dating Committee, not "two negative quarters".
+- **Unemployment rate** = unemployed ÷ labor force (people working or actively looking), from the household survey (CPS). People not looking are out of the labor force, not unemployed. The Florida rate is a LAUS model-based estimate, not a direct survey count.
+- **CPS vs. CES are different surveys:** the unemployment rate comes from the household survey (CPS); payroll jobs and average hourly earnings come from the establishment survey (CES). They can tell slightly different stories in a given month. The headline "jobs report" number is the **monthly change** in CES payrolls, not the level.
+- **Average hourly earnings are nominal.** Real wage growth = AHE growth minus inflation; copy must never call AHE growth a raise in purchasing power on its own.
+- **Job openings (JOLTS)** measure labor demand; openings per unemployed person is a common tightness gauge. JOLTS data run one month behind the jobs report.
 - No forecasts, no political opinions, no investment advice.
+
+### 5.3 BLS whitelist (function `netlify/functions/bls.mjs`) — M13
+
+| Series | Title | Units | Survey | Seasonally adjusted |
+|---|---|---|---|---|
+| LASST120000000000003 | Florida unemployment rate | % | LAUS | Yes |
+| LNS14000000 | U.S. unemployment rate | % | CPS | Yes |
+| CES0500000003 | Average hourly earnings, all private employees | dollars per hour | CES | Yes |
+| CES0000000001 | Total nonfarm payroll employment | thousands of jobs | CES | Yes |
+| JTS000000000000000JOL | Job openings, total nonfarm | thousands | JOLTS | Yes |
+
+All monthly. **API contract:** `GET /api/bls?series=ID&start=YYYY-MM-DD` (start optional; ids case-insensitive) → `{series, title, units, frequency: "Monthly", source: "U.S. Bureau of Labor Statistics", observations:[{date, value, preliminary?}]}` — the `/api/fred` shape plus `source`, so the client and chart helpers are reused. The function POSTs to `https://api.bls.gov/publicAPI/v2/timeseries/data/` with `registrationkey` from `BLS_API_KEY`; unknown series or bad `start` → 400; missing key → 500 with setup instructions; upstream failure → 502; the key never appears in any response. `Cache-Control: public, max-age=3600`.
+
+**Gotchas builders must handle:**
+- Period `M13` is the annual average — drop it; keep `M01`–`M12` only.
+- BLS uses `"-"` for missing values — drop non-numeric values.
+- BLS returns newest first — sort ascending by date (`YYYY-MM-01`).
+- `preliminary: true` only when the observation's footnotes include code `P`; the page labels those values "(preliminary)".
+- BLS v2 allows at most **20 years per request**: startyear is clamped to endyear − 19 (default window = 20 years).
+- The key allows **500 queries/day** — CDN caching (`max-age=3600`) plus the client's `sessionStorage` cache keep usage far below it.
+- **LAUS (state) data are revised each March** (annual benchmarking); recent CES and JOLTS months are revised in later releases.
+- **JOLTS lags one month more than CES**: the latest openings month is usually one month earlier than the latest payroll month. Don't present them as the same month.
 
 ---
 
@@ -183,7 +210,17 @@ Priorities: **Must** = v2 is not done without it; **Should** = planned in a mile
 | F62 | Security: key never in browser/repo; whitelist enforced; Content-Security-Policy and other security headers in `netlify.toml` (scripts only from self + cdnjs) | Must |
 | F63 | Glossary (≈ 25 terms) in `content.js`, shown as a section on the dashboard and reused by quiz explanations | Should |
 
-### 6.7 Explicitly not in v2
+### 6.7 Labor Market (`labor.html`, BLS) — M13
+| # | Feature | Priority |
+|---|---|---|
+| F70 | `/api/bls` Netlify Function with the §5.3 whitelist, key from `BLS_API_KEY`, normalization and error mapping, with unit tests (mocked fetch) | Must |
+| F71 | **Labor Market** nav entry right after Dashboard; range buttons 1Y/5Y/10Y/20Y (default 10Y); NBER recession shading (USREC via `/api/fred`); CSV + data table on every chart (reuse `charts.js`) | Must |
+| F72 | **Unemployment card:** Florida (LAUS) vs. U.S. (CPS) two-line chart; latest value + month for each; gap line "Florida is X percentage points below/above the U.S. rate" computed for the same month only | Must |
+| F73 | **Earnings card:** average hourly earnings ($/hr), latest value + month and % change vs. a year earlier, labelled nominal | Must |
+| F74 | **Payrolls card:** total nonfarm level (thousands), latest level + month and change vs. the previous month in jobs (the headline jobs-report number) | Must |
+| F75 | **Job openings card:** JOLTS openings, latest value shown in millions (e.g., "7.1 million") + month | Must |
+| F76 | Latest values marked "(preliminary)" when BLS flags them; per-card error state (one failing series doesn't break the others); copy from `LABOR` in `content.js` incl. a revisions note | Must |
+### 6.8 Explicitly not in v2
 User accounts, saved progress across devices, class rosters/grade sync, free-text series search, forecasts, any LLM/AI features in the site itself, ads/analytics trackers. See §9.
 
 ---
@@ -197,6 +234,8 @@ public/
   styles.css          Global styles + print + present styles (frontend-engineer)
   present.html        Class Mode (frontend-engineer)
   present.js          Class Mode logic (frontend-engineer)
+  labor.html          Labor Market page (frontend-engineer)
+  labor.js            Labor Market logic (frontend-engineer)
   policy.html         Policy Lab (econ-modeling-engineer)
   policy.js           Policy Lab logic (econ-modeling-engineer)
   policy.css          Policy Lab page styles (econ-modeling-engineer)
@@ -205,9 +244,10 @@ public/
   quiz.css            Quiz page styles (quiz-designer)
   quiz-bank.js        Concept question bank (quiz-designer)
   indicators.js       Indicator metadata + per-indicator copy (econ-content-writer)
-  content.js          All other copy: About, glossary, explainers, era blurbs, citations metadata (econ-content-writer)
+  content.js          All other copy: About, glossary, explainers, era blurbs, citations metadata, LABOR (econ-content-writer)
   lib/
-    fred-client.js    getSeries(): fetch /api/fred, cache, errors (frontend-engineer)
+    fred-client.js    getSeries(): fetch /api/fred, cache, errors; createFredClient options (frontend-engineer)
+    bls-client.js     getBlsSeries(): same client pointed at /api/bls (frontend-engineer)
     charts.js         Chart.js helpers: theme, recession shading plugin, CSV export, data table (frontend-engineer)
     nav.js            Shared header/nav + footer (frontend-engineer)
     format.js         Date/number formatting, URL-hash state helpers (frontend-engineer)
@@ -215,8 +255,10 @@ public/
     narrate.js        Data-driven plain-English sentences (econ-modeling-engineer)
     quiz-gen.js       Live-question templates, seeded PRNG, round builder (quiz-designer)
 netlify/functions/fred.mjs   FRED proxy (data-api-engineer)
+netlify/functions/bls.mjs    BLS proxy (data-api-engineer)
 tests/
   fred.test.mjs       (data-api-engineer)
+  bls.test.mjs        (data-api-engineer)
   frontend.test.mjs   format.js, charts.js pure helpers (CSV), fred-client.js with mocked fetch (frontend-engineer)
   econ.test.mjs       econ.js + narrate.js (econ-modeling-engineer)
   quiz.test.mjs       quiz-gen.js + quiz-bank.js integrity (quiz-designer)
@@ -276,6 +318,21 @@ Every milestone ends with: `npm test` green, qa-tester PASS, commit named after 
   6. Click **Copy link**, open in a new tab → same settings restored.
   7. On a phone, sliders are usable with a thumb and show their values.
 
+### M13 — Labor Market (BLS)
+*(Numbered after M12 but built right after M8, before M9, at the owner's request.)*
+- **Goal:** Show the labor market with official BLS data — Florida vs. U.S. unemployment, wages, jobs and openings — through a second keyed API that stays server-side.
+- **Scope:** F70–F76, §5.3. New `/api/bls` function and `labor.html` page; "Labor Market" nav entry after Dashboard; `fred-client.js` gains `cachePrefix`/`sourceName` options (defaults unchanged) so `bls-client.js` reuses it.
+- **Files:** `netlify/functions/bls.mjs`, `tests/bls.test.mjs` (data-api-engineer); `public/labor.html`, `public/labor.js`, `public/lib/bls-client.js`, `public/lib/fred-client.js`, `public/lib/nav.js`, `public/styles.css`, `tests/frontend.test.mjs` (frontend-engineer); `public/content.js` (`LABOR`, BLS `SOURCES`) (econ-content-writer); `netlify.toml` (`/api/bls` redirect), `.env.example` (`BLS_API_KEY`), `README.md`, `CLAUDE.md` (architect).
+- **Owners:** data-api-engineer (lead for the function), frontend-engineer (page lead), econ-content-writer, architect.
+- **Acceptance:** all five §5.3 ids return 200; any other id → 400 listing allowed ids; bad `start` → 400; missing key → 500 with setup text; fetch throw / HTTP error / `REQUEST_NOT_PROCESSED` → 502; the key never appears in any response body (all unit-tested with mocked fetch). Observations exclude M13 and `"-"`, are sorted ascending, request span ≤ 20 years, `preliminary` set only for footnote `P`. Response sends `Cache-Control: public, max-age=3600`. Existing fred-client tests still pass. Page shows four cards with latest value + month; Florida–U.S. gap uses the same month; payroll change is month-over-month in jobs; openings shown in millions; one failing series shows that card's error only. Copy states CPS vs. CES, AHE is nominal, LAUS revised each March, JOLTS lag.
+- **How to test (live):**
+  1. In Netlify → Site configuration → Environment variables, set `BLS_API_KEY`, then **Trigger deploy**.
+  2. Open `/api/bls?series=LASST120000000000003` → JSON with `source: "U.S. Bureau of Labor Statistics"` and monthly observations through a recent month; no key in the body. `/api/bls?series=FOO` → 400.
+  3. Click **Labor Market** in the nav → four charts: Florida vs. U.S. unemployment, average hourly earnings, payroll jobs, job openings; each shows a latest value and month (and "(preliminary)" where flagged); the gap line names a single month.
+  4. Click **1Y / 5Y / 10Y / 20Y** → all four charts redraw for that range.
+  5. Click **Download CSV** and **Show data table** on a card → the last row matches the card's latest value.
+  6. At **20Y** → gray recession bands at 2008–09 and 2020; unemployment spikes sit inside the 2020 band.
+
 ### M9 — Policy Lab II: Phillips curve + policy stance
 - **Goal:** Show the Phillips curve and the real interest rate with real data, including where the textbook story breaks.
 - **Scope:** F36, F37, F38, F39 (Phillips + stance parts).
@@ -334,13 +391,13 @@ Every milestone ends with: `npm test` green, qa-tester PASS, commit named after 
 
 ## 9. Future roadmap — not in v2
 
-Needs accounts, a database, a different backend or other APIs, so it is out of scope for v2's static + one-function architecture:
+Needs accounts, a database, a different backend or other APIs, so it is out of scope for v2's static + whitelisted-proxy-function architecture (FRED, and BLS from M13):
 
 - **Class accounts & grade sync:** rosters, saved scores, LMS (Canvas LTI) gradebook pass-back. Needs auth + database + FERPA review.
 - **Cross-device progress / spaced repetition:** needs user storage.
 - **AI tutor ("explain this chart to me", free-text answers graded by an LLM):** needs an LLM API key and cost controls.
 - **Real-time "what the Fed saw" mode:** ALFRED vintage data (`realtime_start/end`) to show first-release numbers and replay decisions with the data available at the time — feasible with the FRED API but needs a more complex function contract and caching; strong v3 candidate.
-- **State and metro dashboards** (state unemployment, Florida focus): hundreds of series; needs a pattern-based whitelist and abuse limits.
+- **State and metro dashboards** (state unemployment, Florida focus): a fixed Florida-vs-U.S. unemployment comparison shipped in M13; broader state/metro coverage means hundreds of series and stays future — needs a pattern-based whitelist and abuse limits.
 - **FOMC meeting calendar, dot plot, Summary of Economic Projections:** not in FRED as clean series; would need another source.
 - **Free-text series search / custom charts:** turns the proxy into an open relay for the API key; needs rate limiting and quotas.
 - **Spanish-language version** (valuable for FAU's student body): buildable statically but needs a translation review owner; defer until copy stabilizes after v2.
@@ -355,7 +412,7 @@ Needs accounts, a database, a different backend or other APIs, so it is out of s
 - Economics: zero factual errors found in instructor review of all copy, quiz explanations and Policy Lab formulas (Autumn signs off).
 - Quiz: in a pilot section, students who take two quizzes improve their concept score from the first to the second (self-reported or in-class tally — no tracking).
 - Instructor adoption: at least one instructor uses Class Mode in a lecture and a seeded quiz during the semester.
-- Ops: Netlify function invocations stay within the free tier (CDN cache + sessionStorage); API key never appears in page source, network responses or the repo.
+- Ops: Netlify function invocations stay within the free tier (CDN cache + sessionStorage); neither key (`FRED_API_KEY`, `BLS_API_KEY`) ever appears in page source, network responses or the repo; the BLS function stays under the key's 500 queries/day.
 
 ## 11. Agent roster for v2
 
@@ -363,10 +420,10 @@ Needs accounts, a database, a different backend or other APIs, so it is out of s
 |---|---|
 | product-strategist | `docs/PRD.md`, `docs/PRD-v2.md` |
 | architect | `netlify.toml`, `package.json`, `.env.example`, `.gitignore`, `README.md`, `CLAUDE.md` |
-| data-api-engineer | `netlify/functions/fred.mjs`, `tests/fred.test.mjs` |
-| frontend-engineer | `public/index.html`, `public/app.js`, `public/styles.css`, `public/present.html`, `public/present.js`, `public/lib/fred-client.js`, `public/lib/charts.js`, `public/lib/nav.js`, `public/lib/format.js`, `tests/frontend.test.mjs` |
+| data-api-engineer | `netlify/functions/fred.mjs`, `tests/fred.test.mjs`, `netlify/functions/bls.mjs`, `tests/bls.test.mjs` |
+| frontend-engineer | `public/index.html`, `public/app.js`, `public/styles.css`, `public/present.html`, `public/present.js`, `public/labor.html`, `public/labor.js`, `public/lib/fred-client.js`, `public/lib/bls-client.js`, `public/lib/charts.js`, `public/lib/nav.js`, `public/lib/format.js`, `tests/frontend.test.mjs` |
 | econ-modeling-engineer | `public/policy.html`, `public/policy.js`, `public/policy.css`, `public/lib/econ.js`, `public/lib/narrate.js`, `tests/econ.test.mjs` |
 | quiz-designer | `public/quiz.html`, `public/quiz.js`, `public/quiz.css`, `public/quiz-bank.js`, `public/lib/quiz-gen.js`, `tests/quiz.test.mjs` |
-| econ-content-writer | `public/indicators.js`, `public/content.js` |
+| econ-content-writer | `public/indicators.js`, `public/content.js` (incl. `LABOR` and BLS `SOURCES` entries) |
 | meta-agent | `.claude/agents/*.md` |
 | orchestrator, qa-tester | no files (coordinate / verify) |

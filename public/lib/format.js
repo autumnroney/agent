@@ -96,3 +96,52 @@ export function buildHash(state = {}) {
   const s = params.toString();
   return s ? `#${s}` : "";
 }
+
+// ---------- Labor Market helpers (M13) ----------
+
+/** Fill {placeholders} in a copy template. */
+export function fillTemplate(template, values) {
+  return String(template).replace(/\{(\w+)\}/g, (_, k) => values[k] ?? "");
+}
+
+/** Thousands -> millions text: 7143 -> "7.1 million". */
+export function formatMillions(thousands, digits = 1) {
+  return `${formatNumber(Number(thousands) / 1000, digits)} million`;
+}
+
+/** Signed thousands with grouping: 142 -> "+142,000"; -33 -> "−33,000"; 0 -> "±0". */
+export function formatJobsChange(thousands) {
+  const n = Math.round(Number(thousands) * 1000);
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "±";
+  return `${sign}${Math.abs(n).toLocaleString("en-US")}`;
+}
+
+/** Latest value minus the one in the immediately preceding calendar month; null if that month is missing. */
+export function monthChange(obs) {
+  if (!Array.isArray(obs) || obs.length < 2) return null;
+  const last = obs.at(-1);
+  const prev = obs.at(-2);
+  if (addMonths(last.date, -1) !== prev.date) return null;
+  return { change: last.value - prev.value, prev };
+}
+
+/** Florida minus U.S. for the same month: the latest month both series share. Null if none. */
+export function latestGap(fl, us) {
+  const byDate = new Map((us ?? []).map((o) => [o.date, o]));
+  for (let i = (fl ?? []).length - 1; i >= 0; i--) {
+    const u = byDate.get(fl[i].date);
+    if (u) return { date: fl[i].date, florida: fl[i].value, us: u.value, gap: Number((fl[i].value - u.value).toFixed(6)) };
+  }
+  return null;
+}
+
+/**
+ * "Florida is 0.3 percentage points below the U.S. rate." from LABOR.templates. Compares at one decimal.
+ * @param {{gap:number}|null} g  result of latestGap
+ */
+export function gapSentence(g, t) {
+  if (!g) return "";
+  const rounded = Number(Math.abs(g.gap).toFixed(1));
+  if (rounded === 0) return t.equal;
+  return fillTemplate(t.gap, { gap: rounded.toFixed(1), dir: g.gap > 0 ? t.above : t.below });
+}

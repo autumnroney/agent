@@ -218,3 +218,16 @@ a { color: var(--brand); }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* Labor Market page (M13). */
+.labor-note { margin: 16px 0 0; color: var(--muted); font-size: 0.85rem; max-width: 80ch; }
+.labor-note:last-of-type { margin-bottom: 32px; }
+.key-line::before { height: 0; border-radius: 0; width: 16px; border-top: 3px solid var(--line); }
+.key-line.dashed::before { border-top-style: dashed; }
+.labor-card .card-head { flex-wrap: wrap; }
+.labor-card .card-head > div:first-child { flex: 1 1 14em; min-width: 0; }
+.labor-card .latest { flex-shrink: 1; min-width: 0; max-width: 100%; }
+.labor-card .reading { margin: 10px 0 0; font-weight: 600; }
+@media (max-width: 480px) {
+  .labor-card .latest { text-align: left; }
+}

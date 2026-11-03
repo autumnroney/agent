@@ -6,6 +6,7 @@ import { SITE, FOOTER, COMING_SOON, COMING_SOON_COMMON } from "../content.js";
 /** Top-level pages in nav order. `page` is the id a page passes to mountNav / <body data-page>. */
 export const NAV_ITEMS = [
   { page: "dashboard", label: "Dashboard", href: "./" },
+  { page: "labor", label: "Labor Market", href: "labor.html" },
   { page: "policy", label: "Policy Lab", href: "policy.html" },
   { page: "quiz", label: "Quiz", href: "quiz.html" },
   { page: "present", label: "Class Mode", href: "present.html" },

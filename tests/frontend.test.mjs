@@ -27,6 +27,15 @@ import {
 } from "../public/lib/charts.js";
 import { recessionPeriods } from "../public/lib/econ.js";
 import { createFredClient, FredError, getSeries } from "../public/lib/fred-client.js";
+import { getBlsSeries } from "../public/lib/bls-client.js";
+import {
+  fillTemplate,
+  formatMillions,
+  formatJobsChange,
+  monthChange,
+  latestGap,
+  gapSentence,
+} from "../public/lib/format.js";
 import { NAV_ITEMS, navHTML, pageFromPath, comingSoonHTML } from "../public/lib/nav.js";
 import * as content from "../public/content.js";
 import { INDICATORS } from "../public/indicators.js";
@@ -347,15 +356,15 @@ describe("fred-client.js", () => {
 // ---------- nav.js ----------
 
 describe("nav.js", () => {
-  test("nav lists the five v2 destinations in order", () => {
+  test("nav lists the destinations in order (Labor Market right after Dashboard)", () => {
     assert.deepEqual(
       NAV_ITEMS.map((i) => i.label),
-      ["Dashboard", "Policy Lab", "Quiz", "Class Mode", "About"]
+      ["Dashboard", "Labor Market", "Policy Lab", "Quiz", "Class Mode", "About"]
     );
   });
 
   test("exactly the current page gets aria-current=page", () => {
-    for (const page of ["dashboard", "policy", "quiz", "present"]) {
+    for (const page of ["dashboard", "labor", "policy", "quiz", "present"]) {
       const html = navHTML(page);
       const current = [...html.matchAll(/<a href="([^"]+)" aria-current="page">([^<]+)<\/a>/g)];
       assert.equal(current.length, 1, page);
@@ -601,5 +610,112 @@ describe("charts.js", () => {
 
   test("USREC is requested from a fixed early date (one cache key, before any chart's first point)", () => {
     assert.equal(USREC_START, "1947-01-01");
+  });
+});
+
+// ---------- M13: BLS client, labor helpers ----------
+
+describe("fred-client options (M13)", () => {
+  test("cachePrefix separates sessionStorage keys; default stays fred:v1:", async () => {
+    const store = new Map();
+    const storage = {
+      getItem: (k) => store.get(k) ?? null,
+      setItem: (k, v) => store.set(k, v),
+      removeItem: (k) => store.delete(k),
+      key: (i) => [...store.keys()][i] ?? null,
+      get length() {
+        return store.size;
+      },
+    };
+    await createFredClient({ fetch: mockFetch(), storage }).getSeries("UNRATE");
+    await createFredClient({ fetch: mockFetch(), storage, cachePrefix: "bls:v1:" }).getSeries("UNRATE");
+    assert.deepEqual([...store.keys()].sort(), ["bls:v1:UNRATE|", "fred:v1:UNRATE|"]);
+  });
+
+  test("sourceName appears in the no-data message", async () => {
+    const empty = mockFetch(async () => jsonResponse({ ...BODY, observations: [] }));
+    await assert.rejects(createFredClient({ fetch: empty, storage: null }).getSeries("UNRATE"), /^FredError: FRED returned no data/);
+    const empty2 = mockFetch(async () => jsonResponse({ ...BODY, observations: [] }));
+    await assert.rejects(
+      createFredClient({ fetch: empty2, storage: null, sourceName: "BLS" }).getSeries("UNRATE"),
+      (e) => e.kind === "empty" && e.message === "BLS returned no data for this series."
+    );
+  });
+
+  test("getBlsSeries calls /api/bls (never BLS directly)", async () => {
+    const calls = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+      return jsonResponse(BODY);
+    };
+    try {
+      await getBlsSeries("lns14000000", { start: "2015-01-01" });
+    } finally {
+      globalThis.fetch = real;
+    }
+    assert.equal(calls.length, 1);
+    const url = new URL(calls[0], "http://x");
+    assert.equal(url.pathname, "/api/bls");
+    assert.equal(url.searchParams.get("series"), "LNS14000000");
+    assert.ok(!calls[0].includes("bls.gov"));
+  });
+
+  test("21-character JOLTS id is accepted", async () => {
+    const f = mockFetch();
+    await createFredClient({ fetch: f, storage: null }).getSeries("JTS000000000000000JOL");
+    assert.equal(f.calls.length, 1);
+  });
+});
+
+describe("labor helpers (M13)", () => {
+  const T = content.LABOR.templates;
+
+  test("formatMillions / formatJobsChange", () => {
+    assert.equal(formatMillions(7143), "7.1 million");
+    assert.equal(formatMillions(159512), "159.5 million");
+    assert.equal(formatJobsChange(142), "+142,000");
+    assert.equal(formatJobsChange(-33), "−33,000");
+    assert.equal(formatJobsChange(1234.5), "+1,234,500");
+    assert.equal(formatJobsChange(0), "±0");
+  });
+
+  test("monthChange uses the immediately previous month only", () => {
+    const obs = [
+      { date: "2026-07-01", value: 159000 },
+      { date: "2026-08-01", value: 159100 },
+    ];
+    assert.equal(monthChange(obs).change, 100);
+    assert.equal(monthChange([{ date: "2026-06-01", value: 1 }, { date: "2026-08-01", value: 2 }]), null);
+    assert.equal(monthChange([{ date: "2026-08-01", value: 1 }]), null);
+    assert.equal(monthChange(undefined), null);
+  });
+
+  test("latestGap matches the same month, not the last index", () => {
+    const fl = [{ date: "2026-07-01", value: 4.0 }, { date: "2026-08-01", value: 4.1 }];
+    const us = [{ date: "2026-07-01", value: 4.3 }];
+    const g = latestGap(fl, us);
+    assert.equal(g.date, "2026-07-01");
+    assert.equal(g.gap, -0.3);
+    assert.equal(latestGap(fl, []), null);
+  });
+
+  test("gapSentence: below, above, equal, none", () => {
+    assert.equal(gapSentence({ gap: -0.34 }, T), "Florida is 0.3 percentage points below the U.S. rate.");
+    assert.equal(gapSentence({ gap: 1.04 }, T), "Florida is 1.0 percentage points above the U.S. rate.");
+    assert.equal(gapSentence({ gap: 0.04 }, T), T.equal);
+    assert.equal(gapSentence(null, T), "");
+  });
+
+  test("fillTemplate fills known keys and blanks unknown ones", () => {
+    assert.equal(fillTemplate(T.yoy, { change: "+3.8%" }), "+3.8% vs. a year earlier");
+    assert.equal(fillTemplate("a {x} b", {}), "a  b");
+  });
+
+  test("LABOR copy has every key the page reads", () => {
+    for (const k of ["heading", "intro", "sourceLine", "revisionsNote"]) assert.ok(content.LABOR[k], k);
+    for (const c of ["unemployment", "earnings", "payrolls", "openings"])
+      for (const f of ["title", "whatItIs", "whyItMatters", "goodToKnow"]) assert.ok(content.LABOR.cards[c][f], `${c}.${f}`);
+    for (const k of ["gap", "above", "below", "equal", "yoy", "monthChange", "preliminary"]) assert.ok(T[k], k);
   });
 });
